@@ -1,0 +1,7 @@
+app:
+  port: 8080
+frontend:
+  port: 8081
+database:
+  dialect: sqlite
+  dsn: mydb.sqlite

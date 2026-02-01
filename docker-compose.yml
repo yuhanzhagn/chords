@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: go-app
+    depends_on:
+      - redis
+    #ports:
+    #  - "8080:8080"
+    volumes:
+      - ./backend:/app      # mount entire project folder with your binary
+    command: ./app   # run your binary inside container
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.app.entrypoints=web
+      - traefik.http.routers.app.rule=PathPrefix(`/api`)
+      #- traefik.http.routers.app.rule=Host(`api.localhost`)
+      - traefik.http.services.app.loadbalancer.server.port=8080
+  
+  frontend:
+    image: node:18-alpine
+    container_name: go-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    #ports:
+    #  - "5173:8000"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - PORT=8000
+      - REACT_APP_URL=13.158.200.71:80/api 
+    command: npm start
+    networks:
+      - web
+#    depends_on:
+#      - app
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.entrypoints=web
+      - traefik.http.routers.frontend.rule=PathPrefix(`/`)
+      #- traefik.http.routers.frontend.rule=Host(`frontend.localhost`)
+      - traefik.http.services.frontend.loadbalancer.server.port=8000
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data     # <-- referencing the defined volume here
+    networks:
+      - web
+
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true 
+     # - traefik.http.middlewares.ratelimit.ratelimit.average=20
+     # - traefik.http.middlewares.ratelimit.ratelimit.burst=10
+     # - traefik.http.routers.myapp.middlewares=ratelimit
+    ports:
+      - "80:80"          # HTTP entry-point
+      - "8080:8080"      # optional: Traefik dashboard on http://localhost:8081
+#      - "8000:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - web
+
+volumes:
+  redis-data:     
+
+networks:
+  web:
+    name: traefik-web

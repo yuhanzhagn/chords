@@ -1,0 +1,96 @@
+# SQLite / databases
+backend/mydb.sqlite
+*.sqlite
+*.sqlite3
+*.db
+
+# ----- Go / backend -----
+# Binaries and build output
+backend/app
+backend/*.exe
+/app
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test and coverage
+*.test
+*.out
+coverage.html
+coverage.out
+*.prof
+*.trace
+
+# Go workspace (optional)
+go.work
+go.work.sum
+
+# ----- Node / frontend -----
+node_modules/
+frontend/node_modules/
+.pnp
+.pnp.js
+.pnp.cjs
+
+# Build and cache
+frontend/build/
+frontend/.cache/
+dist/
+.next/
+out/
+.nuxt/
+
+# Test coverage (frontend)
+frontend/coverage/
+/coverage
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# ----- Environment / secrets -----
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+.credentials
+
+# ----- IDE / editor -----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+project.lock.json
+
+# ----- OS -----
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ----- Docker -----
+docker-compose.override.yml
+.docker/
+
+# ----- Temp / misc -----
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+*.bak
+*.backup
+.cache/
