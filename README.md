@@ -133,7 +133,3 @@ go test ./...
 cd frontend
 npm test
 ```
-
-## License
-
-Use and modify as needed for your project.
