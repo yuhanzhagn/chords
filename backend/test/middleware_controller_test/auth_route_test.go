@@ -1,70 +1,72 @@
 package middleware_controller
 
-import(
-    "testing"
-    "time"
+import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"bytes"
+	"testing"
+	"time"
 
-	"github.com/gin-contrib/cors"
-    "github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/mock"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
-    "gorm.io/driver/sqlite"
-    "gorm.io/gorm"
 
-    "backend/internal/model"
-    "backend/internal/service"
-	"backend/internal/controller"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"backend/internal/cache"
-//	"backend/internal/middleware/jwtauth"
+	"backend/internal/controller"
+	"backend/internal/model"
+	"backend/internal/service"
+
+	//	"backend/internal/middleware/jwtauth"
+	"backend/internal/logrus"
 	"backend/internal/middleware/loadshedding"
 	"backend/internal/middleware/logger"
-	"backend/internal/logrus"
-//	"backend/utils"
+	//	"backend/utils"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
-    db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-    assert.NoError(t, err, "failed to connect database")
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err, "failed to connect database")
 
-    // Migrate schema
-    err = db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Message{}, &model.ChatRoom{}, &model.UserChatRoom{})
-    assert.NoError(t, err, "failed to migrate database")
+	// Migrate schema
+	err = db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Message{}, &model.ChatRoom{}, &model.UserChatRoom{})
+	assert.NoError(t, err, "failed to migrate database")
 
-    return db
+	return db
 }
 
 func setupTestCache(t *testing.T) *cache.TypedCache[service.BlockEntry] {
-    c := cache.NewTypedCache[service.BlockEntry](
-        10*time.Minute,
-        15*time.Minute,
-    ) 
+	c := cache.NewTypedCache[service.BlockEntry](
+		10*time.Minute,
+		15*time.Minute,
+	)
 	return c
 }
 
-func setupBasicMiddleware(t *testing.T) *gin.Engine{
+func setupBasicMiddleware(t *testing.T) *gin.Engine {
 	r := gin.New()
 	// init middlewares
 	log := logrus.InitLogrus()
 	r.Use(logger.LogrusLogger(log))
 	r.Use(gin.Recovery())
 	r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"*"}, // or "*" for all origins
-        AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-        AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-        AllowCredentials: true,
-        MaxAge:           12 * time.Hour,
-    }))
+		AllowOrigins:     []string{"*"}, // or "*" for all origins
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 	r.Group("/api")
 	return r
 }
 
-func TestAuthLogin(t *testing.T){
+func TestAuthLogin(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	// authFunc := jwtauth.NewAuthMiddleware(authService).Auth()
@@ -75,11 +77,11 @@ func TestAuthLogin(t *testing.T){
 
 	authRoutes := r.Group("/api/auth")
 	authRoutes.Use(loadsheddingFunc)
-    {
-        authRoutes.POST("/register", authController.Register)
-        authRoutes.POST("/login", authController.Login)
+	{
+		authRoutes.POST("/register", authController.Register)
+		authRoutes.POST("/login", authController.Login)
 		authRoutes.POST("/logout", authController.Logout)
-    } 
+	}
 
 	body := map[string]string{
 		"username": "john",
@@ -109,8 +111,8 @@ func TestAuthLogin(t *testing.T){
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusUnauthorized, w.Code)
-    require.Contains(t, w.Body.String(), `"error"`)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	require.Contains(t, w.Body.String(), `"error"`)
 
 	//success
 	body = map[string]string{
@@ -125,11 +127,10 @@ func TestAuthLogin(t *testing.T){
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-    require.Contains(t, w.Body.String(), `"token"`)
+	require.Contains(t, w.Body.String(), `"token"`)
 }
 
-
-func TestAuthRegister(t *testing.T){
+func TestAuthRegister(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	// authFunc := jwtauth.NewAuthMiddleware(authService).Auth()
@@ -140,15 +141,15 @@ func TestAuthRegister(t *testing.T){
 
 	authRoutes := r.Group("/api/auth")
 	authRoutes.Use(loadsheddingFunc)
-    {
-        authRoutes.POST("/register", authController.Register)
-        //authRoutes.POST("/login", authController.Login)
+	{
+		authRoutes.POST("/register", authController.Register)
+		//authRoutes.POST("/login", authController.Login)
 		//authRoutes.POST("/logout", authController.Logout)
-    } 
+	}
 
 	body := map[string]string{
 		"username": "john",
-		"gmail":"crazyjohn@test.com",
+		"gmail":    "crazyjohn@test.com",
 		"password": "wrong",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -164,13 +165,13 @@ func TestAuthRegister(t *testing.T){
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusBadRequest, w.Code)
-    //require.Contains(t, w.Body.String(), `"error"`)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	//require.Contains(t, w.Body.String(), `"error"`)
 
 	//success
 	body = map[string]string{
 		"username": "john",
-		"email":"crazyjohn@test.com",
+		"email":    "crazyjohn@test.com",
 		"password": "correct",
 	}
 
@@ -181,10 +182,10 @@ func TestAuthRegister(t *testing.T){
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-    //require.Contains(t, w.Body.String(), `"token"`)
+	//require.Contains(t, w.Body.String(), `"token"`)
 }
 
-func TestAuthLogout(t *testing.T){
+func TestAuthLogout(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	// authFunc := jwtauth.NewAuthMiddleware(authService).Auth()
@@ -195,11 +196,11 @@ func TestAuthLogout(t *testing.T){
 
 	authRoutes := r.Group("/api/auth")
 	authRoutes.Use(loadsheddingFunc)
-    {
-        //authRoutes.POST("/register", authController.Register)
-        //authRoutes.POST("/login", authController.Login)
+	{
+		//authRoutes.POST("/register", authController.Register)
+		//authRoutes.POST("/login", authController.Login)
 		authRoutes.POST("/logout", authController.Logout)
-    } 
+	}
 	mockService.
 		On("Logout", "Wrong").
 		Return(errors.New("invalid credentials"))
@@ -214,8 +215,8 @@ func TestAuthLogout(t *testing.T){
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusUnauthorized, w.Code)
-    require.Contains(t, w.Body.String(), `"error"`)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	require.Contains(t, w.Body.String(), `"error"`)
 
 	//success
 	req = httptest.NewRequest(http.MethodPost, "/api/auth/logout", bytes.NewBuffer(nil))
@@ -224,7 +225,7 @@ func TestAuthLogout(t *testing.T){
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-    //require.Contains(t, w.Body.String(), `"token"`)
+	//require.Contains(t, w.Body.String(), `"token"`)
 }
 
 type MockAuthService struct {

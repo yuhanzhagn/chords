@@ -6,18 +6,16 @@ services:
     container_name: go-app
     depends_on:
       - redis
-    #ports:
-    #  - "8080:8080"
+    working_dir: /app
     volumes:
       - ./backend:/app      # mount entire project folder with your binary
-    command: ./app   # run your binary inside container
+    command: ./app  # run your binary inside container
     networks:
       - web
     labels:
       - traefik.enable=true
       - traefik.http.routers.app.entrypoints=web
       - traefik.http.routers.app.rule=PathPrefix(`/api`)
-      #- traefik.http.routers.app.rule=Host(`api.localhost`)
       - traefik.http.services.app.loadbalancer.server.port=8080
   
   frontend:
@@ -31,7 +29,7 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - PORT=8000
-      - REACT_APP_URL=13.158.200.71:80/api 
+      - REACT_APP_URL=localhost:8000/api 
     command: npm start
     networks:
       - web
@@ -66,8 +64,8 @@ services:
      # - traefik.http.middlewares.ratelimit.ratelimit.burst=10
      # - traefik.http.routers.myapp.middlewares=ratelimit
     ports:
-      - "80:80"          # HTTP entry-point
-      - "8080:8080"      # optional: Traefik dashboard on http://localhost:8081
+      - "8000:80"          # HTTP entry-point (host:8000 -> container:80)
+#      - "8080:8080"      # optional: Traefik dashboard on http://localhost:8081
 #      - "8000:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

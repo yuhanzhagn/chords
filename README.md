@@ -1,4 +1,4 @@
-# LetsChat
+# Chords
 
 A real-time chat application with a Go backend and React frontend. Users can register, log in, create and join chatrooms, and exchange messages over WebSockets.
 
