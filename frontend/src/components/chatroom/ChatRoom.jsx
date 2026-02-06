@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { RefreshContext } from "./RefreshContext";
 
 const ipaddr = `${process.env.REACT_APP_URL}`
-const SOCKET_URL = `ws://${ipaddr}/ws/`; // <-- change to your WebSocket endpoint
+const SOCKET_URL = `ws://localhost:8000/ws`; // <-- change to your WebSocket endpoint
 
 const ChatRoom = () => {
   const [chatrooms, setChatrooms] = useState([]);
@@ -69,7 +69,7 @@ const ChatRoom = () => {
 
   /* Establish WebSocket connection once */
   useEffect(() => {
-    const socket = new WebSocket(SOCKET_URL + user.id);
+    const socket = new WebSocket(SOCKET_URL);
     socketRef.current = socket;
 
     socket.onopen = () => {

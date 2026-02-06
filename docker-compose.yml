@@ -5,7 +5,10 @@ services:
     build: .
     container_name: go-app
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     working_dir: /app
     volumes:
       - ./backend:/app      # mount entire project folder with your binary
@@ -17,7 +20,25 @@ services:
       - traefik.http.routers.app.entrypoints=web
       - traefik.http.routers.app.rule=PathPrefix(`/api`)
       - traefik.http.services.app.loadbalancer.server.port=8080
-  
+  connection:
+    build: .
+    container_name: go-connection
+    depends_on:
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ./connection:/app      # mount entire project folder with your binary
+    command: ./connection  # run your binary inside container
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.connection.entrypoints=web
+      - traefik.http.routers.connection.rule=PathPrefix(`/ws`)
+      - traefik.http.services.connection.loadbalancer.server.port=8081
   frontend:
     image: node:18-alpine
     container_name: go-frontend
@@ -51,6 +72,45 @@ services:
     networks:
       - web
 
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: kafka
+    hostname: kafka
+
+    ports:
+      - "9092:9092"
+
+    environment:
+      # ---- KRaft  ----
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # ---- listeners ----
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # ---- 行为配置 ----
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # ---- 日志目录（必须）----
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+
+    networks:
+      - web
+
+    healthcheck:
+      test: ["CMD", "bash", "-c", " /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   traefik:
     image: traefik:v2.11
     container_name: traefik
@@ -73,7 +133,8 @@ services:
       - web
 
 volumes:
-  redis-data:     
+  redis-data:
+  kafka-data:
 
 networks:
   web:

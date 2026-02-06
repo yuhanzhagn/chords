@@ -1,7 +1,8 @@
 package routes
 
 import (
-	"strconv"
+	"context"
+	"log"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -11,6 +12,7 @@ import (
 
 	"backend/internal/cache"
 	"backend/internal/controller"
+	"backend/internal/kafka"
 	"backend/internal/logrus"
 	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
@@ -18,7 +20,6 @@ import (
 	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/internal/service"
-	"backend/internal/websocket"
 )
 
 /*
@@ -30,41 +31,40 @@ func SetupWebsocket(r *gin.Engine){
     })
 }*/
 
-func SetupAuthRouter(r *gin.RouterGroup, authService service.AuthService, loadsheddingFunc gin.HandlerFunc){
+func SetupAuthRouter(r *gin.RouterGroup, authService service.AuthService, loadsheddingFunc gin.HandlerFunc) {
 	// authService := service.NewAuthService(db, typedCache)
 	authController := controller.NewAuthController(authService)
 
 	authRoutes := r.Group("/auth")
 	authRoutes.Use(loadsheddingFunc)
-    {
-        authRoutes.POST("/register", authController.Register)
-        authRoutes.POST("/login", authController.Login)
+	{
+		authRoutes.POST("/register", authController.Register)
+		authRoutes.POST("/login", authController.Login)
 		authRoutes.POST("/logout", authController.Logout)
-    } 
+	}
 }
 
-func SetupMembershipRouter(r *gin.RouterGroup, s service.MembershipService, authFunc gin.HandlerFunc, loadsheddingFunc gin.HandlerFunc){
-   // membershipService := service.NewMembershipService(db)
-    membershipController := controller.NewMembershipController(s)
-	
+func SetupMembershipRouter(r *gin.RouterGroup, s service.MembershipService, authFunc gin.HandlerFunc, loadsheddingFunc gin.HandlerFunc) {
+	// membershipService := service.NewMembershipService(db)
+	membershipController := controller.NewMembershipController(s)
+
 	memberships := r.Group("/memberships")
 
 	memberships.Use(loadsheddingFunc)
-    // Apply middleware to all /chatrooms routes
-    memberships.Use(authFunc)	
+	// Apply middleware to all /chatrooms routes
+	memberships.Use(authFunc)
 
 	{
-        memberships.POST("/add-user", membershipController.AddUser)
+		memberships.POST("/add-user", membershipController.AddUser)
 		//memberships.POST("/chatrooms", membershipController.GetUserChatRooms)
 		memberships.GET("/:username/chatrooms", func(c *gin.Context) {
-   	 		username := c.Param("username")  // <-- string, no conversion
-    		membershipController.GetUserChatRooms(c, username)
+			username := c.Param("username") // <-- string, no conversion
+			membershipController.GetUserChatRooms(c, username)
 		})
 
-    }
+	}
 
 }
-
 
 func SetupMessageRouter(r *gin.RouterGroup, messageService service.MessageService, authFunc gin.HandlerFunc, loadsheddingFunc gin.HandlerFunc) {
 	messageController := controller.NewMessageController(messageService)
@@ -72,10 +72,6 @@ func SetupMessageRouter(r *gin.RouterGroup, messageService service.MessageServic
 	r.POST("/messages", loadsheddingFunc, authFunc, messageController.CreateMessage)
 	r.GET("/chatrooms/:id/messages", loadsheddingFunc, authFunc, messageController.GetMessagesByChatRoom)
 	r.DELETE("/messages/:id", loadsheddingFunc, authFunc, messageController.DeleteMessage)
-	r.GET("/ws/:userID", func(c *gin.Context) {
-		userID, _ := strconv.ParseUint(c.Param("userID"), 10, 64)
-		websocket.ServeWs(uint(userID), c.Writer, c.Request, messageService)
-	})
 }
 
 func SetupChatroomRouter(r *gin.RouterGroup, chatRoomService service.ChatRoomService, authFunc gin.HandlerFunc, loadsheddingFunc gin.HandlerFunc) {
@@ -105,22 +101,39 @@ func SetupUserRouter(r *gin.RouterGroup, userService service.UserService, authFu
 	}
 }
 
+func setupKafkaConsumer(kafkaService service.KafkaService) {
+	// Implement Kafka consumer setup here
+	consumer, err := kafka.NewWsOutboundConsumer(
+		[]string{"kafka:9092"},
+		"ws-gateway",
+		[]string{"ws.inbound"},
+		kafkaService.HandleOutboundEvent,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-func SetupRouter(db *gorm.DB, rds *redis.Client) *gin.Engine{
+	ctx, _ := context.WithCancel(context.Background())
+	// defer cancel()
+
+	consumer.Start(ctx)
+}
+
+func SetupRouter(db *gorm.DB, rds *redis.Client) *gin.Engine {
 	//r := gin.Default()
-    r := gin.New()
+	r := gin.New()
 	// init logger
 	log := logrus.InitLogrus()
 	r.Use(logger.LogrusLogger(log))
 	r.Use(gin.Recovery())
-	
+
 	r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"*"}, // or "*" for all origins
-        AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-        AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-        AllowCredentials: true,
-        MaxAge:           12 * time.Hour,
-    }))
+		AllowOrigins:     []string{"*"}, // or "*" for all origins
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	typedCache := cache.NewTypedCache[service.BlockEntry](10*time.Minute, 15*time.Minute)
 	redisCache := cache.NewRedisCache[[]model.ChatRoom](rds)
@@ -133,6 +146,11 @@ func SetupRouter(db *gorm.DB, rds *redis.Client) *gin.Engine{
 	membershipService := service.NewMembershipService(repos, redisCache)
 	messageService := service.NewMessageService(repos)
 
+	kafkaService := service.KafkaService{
+		Producer:       kafka.NewKafkaProducer([]string{"kafka:9092"}),
+		MessageService: messageService,
+	}
+	setupKafkaConsumer(kafkaService)
 	authFunc := jwtauth.NewAuthMiddleware(authService).Auth()
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
 
