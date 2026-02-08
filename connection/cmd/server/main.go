@@ -23,7 +23,7 @@ func WsAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func WsHandler(hub *websocket.Hub, msgService service.MessageService) http.Handler {
+func WsHandler(hub *websocket.Hub, msgService *service.MessageService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// userID := r.Context().Value("userID").(uint)
@@ -54,7 +54,7 @@ func main() {
 	mux := http.NewServeMux()
 	hub := websocket.NewHub(websocket.NewMemoryStore())
 
-	msgService := service.MessageService{
+	msgService := &service.MessageService{
 		Producer: kafka.NewKafkaProducer([]string{"kafka:9092"}),
 	}
 

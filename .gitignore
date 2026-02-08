@@ -94,3 +94,5 @@ temp/
 *.bak
 *.backup
 .cache/
+
+./connection/connection

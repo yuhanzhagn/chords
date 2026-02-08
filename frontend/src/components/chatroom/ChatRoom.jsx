@@ -83,7 +83,7 @@ const ChatRoom = () => {
         }));
  
       if (selectedChatroom) {
-        socket.send(JSON.stringify({ MsgType: "SUBSCRIBE", RoomID: selectedChatroom.ID, UserID: user.id, Message:"", TempID: uuidv4()}));
+        socket.send(JSON.stringify({ MsgType: "join", RoomID: selectedChatroom.ID, UserID: user.id, Message:"", TempID: uuidv4()}));
       }
         };
 
@@ -94,7 +94,7 @@ const ChatRoom = () => {
         console.log(payload);
         console.log(selectedChatroomRef.current);
         switch (payload.MsgType) {
-          case "MESSAGE_TO_CLIENT":
+          case "message":
             if (payload.RoomID === selectedChatroomRef.current?.ID) {
               let modeledMsg = JSON.parse(payload.Message);
               modeledMsg = {
@@ -123,7 +123,7 @@ const ChatRoom = () => {
             break;
 
           // Handle other event types (e.g., system messages, room updates) here.
-        case "CLOSING":
+        case "close":
             setShowPopup(true);
             break;  
          default:
@@ -141,7 +141,7 @@ const ChatRoom = () => {
 
     socket.onclose = () => {
     if (selectedChatroom) {
-        socket.send(JSON.stringify({ MsgType: "UNSUBSCRIBE", RoomID: selectedChatroom.ID, UserID: user.id, Message:"", TempID: uuidv4() }));
+        socket.send(JSON.stringify({ MsgType: "leave", RoomID: selectedChatroom.ID, UserID: user.id, Message:"", TempID: uuidv4() }));
       }
       console.info("[socket] connection closed");
         //navigate("/login");
@@ -176,7 +176,7 @@ const ChatRoom = () => {
   const handleSelectChatroom = async (room) => {
 
       if (selectedChatroom) {
-        socketRef.current.send(JSON.stringify({ MsgType: "UNSUBSCRIBE", RoomID: selectedChatroom.ID, UserID: user.id, Message:"", TempID: uuidv4() }));
+        socketRef.current.send(JSON.stringify({ MsgType: "leave", RoomID: selectedChatroom.ID, UserID: user.id, Message:"", TempID: uuidv4() }));
       }
 
     setSelectedChatroom(room);
@@ -205,7 +205,7 @@ const ChatRoom = () => {
       setMessages(data);
 
       if (socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({ MsgType: "SUBSCRIBE", RoomID: room.ID, UserID: user.id, Message:"", TempID: uuidv4() }));
+        socketRef.current.send(JSON.stringify({ MsgType: "join", RoomID: room.ID, UserID: user.id, Message:"", TempID: uuidv4() }));
       }
     } catch (err) {
       setError(err.message);
@@ -223,7 +223,7 @@ const ChatRoom = () => {
     }
 
     let payload = {
-      MsgType: "MESSAGE_TO_SERVER",
+      MsgType: "message",
       RoomID: selectedChatroom.ID,
       UserID: user.id,
       Message: text,

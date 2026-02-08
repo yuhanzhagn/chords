@@ -43,7 +43,7 @@ func ServeWs(
 	w http.ResponseWriter,
 	r *http.Request,
 	hub *Hub,
-	msgService service.MessageService,
+	msgService *service.MessageService,
 ) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -56,9 +56,10 @@ func ServeWs(
 	}
 
 	client := &Client{
-		ID:       userID,
-		Conn:     conn,
-		SendChan: make(chan []byte, 256),
+		ID:         userID,
+		Conn:       conn,
+		SendChan:   make(chan []byte, 256),
+		msgService: *msgService,
 	}
 
 	// 1. 注册 client（全局唯一真相）
