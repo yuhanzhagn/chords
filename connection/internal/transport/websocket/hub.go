@@ -4,6 +4,7 @@ import (
 	"connection/internal/platform/kafka"
 	"connection/internal/service"
 	"encoding/json"
+	"log"
 	"sync"
 )
 
@@ -57,13 +58,10 @@ func (h *Hub) Broadcast(roomID uint, msg []byte) {
 
 func (h *Hub) HandleOutboundEvent(event kafka.KafkaEvent) {
 	// Unmarshal the outbound message to get roomID and body
-	var outboundMsg struct {
-		RoomID uint   `json:"room_id"`
-		Body   []byte `json:"body"`
-	}
-	if err := json.Unmarshal(event.Payload, &outboundMsg); err != nil {
+	log.Printf("Hub handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserID, event.RoomID, event.MsgType)
+	rawbytes, err := json.Marshal(event)
+	if err != nil {
 		return
 	}
-
-	h.Broadcast(outboundMsg.RoomID, outboundMsg.Body)
+	h.Broadcast(event.RoomID, rawbytes)
 }

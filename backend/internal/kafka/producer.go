@@ -14,7 +14,7 @@ func NewKafkaProducer(brokers []string) *KafkaProducer {
 	return &KafkaProducer{
 		writer: &kafka.Writer{
 			Addr:     kafka.TCP(brokers...),
-			Topic:    "chat_messages",
+			Topic:    "ws.outbound",
 			Balancer: &kafka.LeastBytes{},
 		},
 	}

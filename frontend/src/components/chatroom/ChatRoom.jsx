@@ -96,14 +96,14 @@ const ChatRoom = () => {
         switch (payload.MsgType) {
           case "message":
             if (payload.RoomID === selectedChatroomRef.current?.ID) {
-              let modeledMsg = JSON.parse(payload.Message);
+              let modeledMsg = payload.Message;
               modeledMsg = {
                 ...modeledMsg,
                 TempID: payload.TempID,
                 status: "sent",
                 fromself: payload.UserID === user.id        
-                }
-                console.log("going to replace msg")
+                };
+                console.log(modeledMsg);
               if (payload.UserID !== user.id ){
                     setMessages((prev) => [...prev, modeledMsg]);
                 }else{

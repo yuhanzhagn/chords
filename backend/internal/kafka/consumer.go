@@ -69,7 +69,8 @@ func (h *wsOutboundHandler) ConsumeClaim(
 			log.Println("[kafka] unmarshal error:", err)
 			continue
 		}
-
+		log.Printf("[kafka] ws outbound consumed message: topic=%s, partition=%d, offset=%d, value=%s\n",
+			msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
 		h.handle(event)
 
 		session.MarkMessage(msg, "")

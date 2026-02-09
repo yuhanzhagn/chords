@@ -6,7 +6,9 @@ import (
 
 // kafka/event.go
 type KafkaEvent struct {
-	Topic   string          `json:"topic"` // room:1 / user:123
-	Type    string          `json:"type"`  // chat.message / notify
-	Payload json.RawMessage `json:"payload"`
+	UserID  uint            `json:"UserID"` // room:1 / user:123
+	RoomID  uint            `json:"RoomID"`
+	MsgType string          `json:"MsgType"` // chat.message / notify
+	Message json.RawMessage `json:"Message"`
+	TempID  string          `json:"TempID"`
 }

@@ -17,7 +17,7 @@ func WsAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 把 userID 塞进 context
+		// put userID in context
 		ctx := context.WithValue(r.Context(), "userID", userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

@@ -2,6 +2,7 @@ package service
 
 import (
 	"backend/internal/kafka"
+	"encoding/json"
 	"log"
 )
 
@@ -22,13 +23,13 @@ type KafkaService struct {
 
 func (s *KafkaService) HandleOutboundEvent(event kafka.KafkaEvent) {
 	// Here you can add logic like logging or basic validation
-	log.Printf("Handling outbound event: Topic=%s, Type=%s", event.Topic, event.Type)
-	switch event.Type {
-	case "chat.message":
+	log.Printf("Handling outbound event: UserID=%s, RoomID=%s, MsgType=%s", event.UserID, event.RoomID, event.MsgType)
+	switch event.MsgType {
+	case "message":
 		s.handleChatMessage(event)
-	case "room.join":
+	case "join":
 		s.handleJoin(event)
-	case "room.leave":
+	case "leave":
 		s.handleLeave(event)
 	default:
 		// Unknown event type
@@ -39,22 +40,28 @@ func (s *KafkaService) handleChatMessage(event kafka.KafkaEvent) {
 	// Process chat message event
 	// For example, you might want to log it or transform it before publishing
 	//
-	s.HandleOutgoingMessage(event.Payload)
+	s.HandleOutgoingMessage(event)
 }
 
 func (s *KafkaService) handleJoin(event kafka.KafkaEvent) {
 	// Process room join event
 	// For example, you might want to log it or transform it before publishing
-	s.HandleOutgoingMessage(event.Payload)
+	s.HandleOutgoingMessage(event)
 }
 
 func (s *KafkaService) handleLeave(event kafka.KafkaEvent) {
 	// Process room leave event
 	// For example, you might want to log it or transform it before publishing
-	s.HandleOutgoingMessage(event.Payload)
+
+	s.HandleOutgoingMessage(event)
 }
 
 // HandleOutgoingMessage handles messages consumed from Kafka
-func (s *KafkaService) HandleOutgoingMessage(data []byte) error {
-	return s.Producer.Publish("ws.inbound", nil, data)
+func (s *KafkaService) HandleOutgoingMessage(event kafka.KafkaEvent) error {
+	rawbyte, err := json.Marshal(event)
+	if err != nil {
+		log.Println("Error marshaling event:", err)
+		return err
+	}
+	return s.Producer.Publish("ws.inbound", nil, rawbyte)
 }
