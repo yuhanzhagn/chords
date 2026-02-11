@@ -44,11 +44,11 @@ function RegisterForm({ onRegister }) {
 
   return (
     <div className="register-container">
-      <h2>新規登録</h2>
+      <h2>Register</h2>
 
       <form onSubmit={handleSubmit}>
         <label>
-          ユーザー名:
+          Username:
           <input
             type="text"
             value={username}
@@ -58,7 +58,7 @@ function RegisterForm({ onRegister }) {
         </label>
 
         <label>
-          メールアドレス:
+          Email:
           <input
             type="email"
             value={email}
@@ -68,7 +68,7 @@ function RegisterForm({ onRegister }) {
         </label>
 
         <label>
-          パスワード:
+          Password:
           <input
             type="password"
             value={password}

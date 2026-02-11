@@ -55,10 +55,10 @@ function LoginForm({ setIsAuth }) {
 
   return (
     <div className="login-container">
-      <h2>ログイン</h2>
+      <h2>Login</h2>
       <form onSubmit={handleSubmit}>
     <label>
-        ユーザー名:
+        Username:
         <input
           type="text"
           value={username}
@@ -67,7 +67,7 @@ function LoginForm({ setIsAuth }) {
         />
       </label>
         <label>
-          パスワード:
+          Password:
           <input
             type="password"
             value={password}

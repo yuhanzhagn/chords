@@ -60,7 +60,7 @@ function CreateChatroomButton({refreshResults}) {
 
   return (
     <>
-      <button onClick={openPopup}>チャットルーム追加</button>
+      <button onClick={openPopup}>Create Chatroom</button>
 
       {showPopup && (
         <div style={styles.overlay}>

@@ -61,7 +61,7 @@ const handleLogout = async () => {
       {token ? (
         <>
           <p>You are logged in! ?</p>
-          <button onClick={handleLogout}>ログアウト</button>
+          <button onClick={handleLogout}>Logout</button>
         </>
       ) : (
         <p>Please <a href="/login">log in</a> or <a href="/register">register</a>.</p>

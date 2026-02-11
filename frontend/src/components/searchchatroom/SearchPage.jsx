@@ -90,7 +90,7 @@ useEffect(() => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button type="submit">検索</button>
+        <button type="submit">Search</button>
         <CreateChatroomButton refreshResults={handleSearch}/>
       </form>
 
