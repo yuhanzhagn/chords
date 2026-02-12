@@ -1,40 +1,41 @@
 package middleware_controller
 
-import(
-    "testing"
-    "time"
+import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"bytes"
+	"testing"
+	"time"
 
-//	"github.com/gin-contrib/cors"
-//	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	//	"github.com/gin-contrib/cors"
+	//	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-//	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	//	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
-//   "gorm.io/driver/sqlite"
-//    "gorm.io/gorm"
+	//   "gorm.io/driver/sqlite"
+	//    "gorm.io/gorm"
 
-    "backend/internal/model"
-//    "backend/internal/service"
+	"backend/internal/model"
+	//    "backend/internal/service"
 	"backend/internal/controller"
-//	"backend/internal/cache"
-//	"backend/internal/middleware/jwtauth"
+	//	"backend/internal/cache"
+	//	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
-//	"backend/internal/middleware/logger"
-//	"backend/internal/logrus"
-//	"backend/utils"
+	//	"backend/internal/middleware/logger"
+	//	"backend/internal/logrus"
+	//	"backend/utils"
 )
+
 /*
-		chatrooms.POST("", chatRoomController.CreateChatRoom)
-		chatrooms.GET("", chatRoomController.GetAllChatRooms)
-		chatrooms.GET("/:id", chatRoomController.GetChatRoomByID)
-		chatrooms.DELETE("/:id", chatRoomController.DeleteChatRoom)
-		chatrooms.GET("/search", chatRoomController.SearchChatRooms)
+	chatrooms.POST("", chatRoomController.CreateChatRoom)
+	chatrooms.GET("", chatRoomController.GetAllChatRooms)
+	chatrooms.GET("/:id", chatRoomController.GetChatRoomByID)
+	chatrooms.DELETE("/:id", chatRoomController.DeleteChatRoom)
+	chatrooms.GET("/search", chatRoomController.SearchChatRooms)
 */
-func TestChatroomCreate(t *testing.T){
+func TestChatroomCreate(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
@@ -45,7 +46,7 @@ func TestChatroomCreate(t *testing.T){
 	chatrooms := r.Group("/api/chatrooms")
 	chatrooms.Use(loadsheddingFunc)
 	chatrooms.Use(setupAuthMiddleware(t))
-	{	
+	{
 		chatrooms.POST("", chatRoomController.CreateChatRoom)
 	}
 
@@ -86,7 +87,7 @@ func TestChatroomCreate(t *testing.T){
 	require.Contains(t, w.Body.String(), "general")
 }
 
-func TestChatroomGetAll(t *testing.T){
+func TestChatroomGetAll(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
@@ -97,7 +98,7 @@ func TestChatroomGetAll(t *testing.T){
 	chatrooms := r.Group("/api/chatrooms")
 	chatrooms.Use(loadsheddingFunc)
 	chatrooms.Use(setupAuthMiddleware(t))
-	{	
+	{
 		chatrooms.GET("", chatRoomController.GetAllChatRooms)
 	}
 
@@ -134,7 +135,7 @@ func TestChatroomGetAll(t *testing.T){
 	require.Contains(t, w.Body.String(), "general")
 }
 
-func TestChatroomGetByID(t *testing.T){
+func TestChatroomGetByID(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
@@ -145,7 +146,7 @@ func TestChatroomGetByID(t *testing.T){
 	chatrooms := r.Group("/api/chatrooms")
 	chatrooms.Use(loadsheddingFunc)
 	chatrooms.Use(setupAuthMiddleware(t))
-	{	
+	{
 		chatrooms.GET("/:id", chatRoomController.GetChatRoomByID)
 	}
 
@@ -176,7 +177,7 @@ func TestChatroomGetByID(t *testing.T){
 	require.Contains(t, w.Body.String(), "data")
 }
 
-func TestChatroomDelete(t *testing.T){
+func TestChatroomDelete(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
@@ -187,7 +188,7 @@ func TestChatroomDelete(t *testing.T){
 	chatrooms := r.Group("/api/chatrooms")
 	chatrooms.Use(loadsheddingFunc)
 	chatrooms.Use(setupAuthMiddleware(t))
-	{	
+	{
 		chatrooms.DELETE("/:id", chatRoomController.DeleteChatRoom)
 	}
 
@@ -218,7 +219,7 @@ func TestChatroomDelete(t *testing.T){
 	require.Contains(t, w.Body.String(), "deleted")
 }
 
-func TestChatroomSearch(t *testing.T){
+func TestChatroomSearch(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
@@ -229,7 +230,7 @@ func TestChatroomSearch(t *testing.T){
 	chatrooms := r.Group("/api/chatrooms")
 	chatrooms.Use(loadsheddingFunc)
 	chatrooms.Use(setupAuthMiddleware(t))
-	{	
+	{
 		chatrooms.GET("/search", chatRoomController.SearchChatRooms)
 	}
 

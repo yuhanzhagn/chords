@@ -1,0 +1,8 @@
+dist/
+build/
+out/
+public/
+
+node_modules/
+
+*.d.ts

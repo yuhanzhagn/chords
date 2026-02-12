@@ -1,56 +1,56 @@
 package middleware_controller
 
-import(
-    "testing"
-    "time"
+import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"bytes"
+	"testing"
+	"time"
 
-//	"github.com/gin-contrib/cors"
-//	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/mock"
+	//	"github.com/gin-contrib/cors"
+	//	"github.com/stretchr/testify/assert"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
-//   "gorm.io/driver/sqlite"
-//    "gorm.io/gorm"
+	//   "gorm.io/driver/sqlite"
+	//    "gorm.io/gorm"
 
-    "backend/internal/model"
-//    "backend/internal/service"
+	"backend/internal/model"
+	//    "backend/internal/service"
 	"backend/internal/controller"
-//	"backend/internal/cache"
-//	"backend/internal/middleware/jwtauth"
+	//	"backend/internal/cache"
+	//	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
-//	"backend/internal/middleware/logger"
-//	"backend/internal/logrus"
-//	"backend/utils"
+	//	"backend/internal/middleware/logger"
+	//	"backend/internal/logrus"
+	//	"backend/utils"
 )
 
 func TestAddUserToChatRoom(t *testing.T) {
-    r := setupBasicMiddleware(t)
+	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
- 
+
 	mockService := new(MockMembershipService)
 	membershipController := controller.NewMembershipController(mockService)
 
 	membershipRoute := r.Group("/api/memberships")
 	membershipRoute.Use(loadsheddingFunc)
 	membershipRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		membershipRoute.POST("/add-user", membershipController.AddUser)
-    } 
+	}
 
 	//fail
 	msg := controller.UserChatroom{Username: "Thom Yorke", ChatRoomID: uint(1)}
 	jsonBody, _ := json.Marshal(msg)
 
 	mockService.
-	On("AddUserToChatRoom", "Thom Yorke", uint(1)).
-	Once().
-	Return(errors.New("DB error"))
+		On("AddUserToChatRoom", "Thom Yorke", uint(1)).
+		Once().
+		Return(errors.New("DB error"))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/memberships/add-user", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -65,9 +65,9 @@ func TestAddUserToChatRoom(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-	On("AddUserToChatRoom", "Thom Yorke", uint(1)).
-	Once().
-	Return(nil)
+		On("AddUserToChatRoom", "Thom Yorke", uint(1)).
+		Once().
+		Return(nil)
 
 	req = httptest.NewRequest(http.MethodPost, "/api/memberships/add-user", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -80,22 +80,22 @@ func TestAddUserToChatRoom(t *testing.T) {
 }
 
 func TestGetChatRoomByUser(t *testing.T) {
-    r := setupBasicMiddleware(t)
+	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
- 
+
 	mockService := new(MockMembershipService)
 	membershipController := controller.NewMembershipController(mockService)
 
 	membershipRoute := r.Group("/api/memberships")
 	membershipRoute.Use(loadsheddingFunc)
 	membershipRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		membershipRoute.GET("/:username/chatrooms", func(c *gin.Context) {
-   	 		username := c.Param("username")  // <-- string, no conversion
-    		membershipController.GetUserChatRooms(c, username)
+			username := c.Param("username") // <-- string, no conversion
+			membershipController.GetUserChatRooms(c, username)
 		})
-    } 
+	}
 
 	//fail
 	msg := controller.UserChatroom{Username: "DaveGrohl", ChatRoomID: uint(1)}
@@ -107,9 +107,9 @@ func TestGetChatRoomByUser(t *testing.T) {
 	// Return([]model.ChatRoom{model.ChatRoom{}}, errors.New("DB error"))
 
 	mockService.
-	On("GetUserSubscribedChatRooms", "DaveGrohl").
-	Once().
-	Return([]model.ChatRoom{model.ChatRoom{}}, errors.New("DB error"))
+		On("GetUserSubscribedChatRooms", "DaveGrohl").
+		Once().
+		Return([]model.ChatRoom{model.ChatRoom{}}, errors.New("DB error"))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/memberships/DaveGrohl/chatrooms", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -129,9 +129,9 @@ func TestGetChatRoomByUser(t *testing.T) {
 	// Return([]model.ChatRoom{model.ChatRoom{}}, nil)
 
 	mockService.
-	On("GetUserSubscribedChatRooms", "DaveGrohl").
-	Once().
-	Return([]model.ChatRoom{model.ChatRoom{}}, nil)
+		On("GetUserSubscribedChatRooms", "DaveGrohl").
+		Once().
+		Return([]model.ChatRoom{model.ChatRoom{}}, nil)
 
 	req = httptest.NewRequest(http.MethodGet, "/api/memberships/DaveGrohl/chatrooms", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")

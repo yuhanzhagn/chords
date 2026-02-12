@@ -2,8 +2,8 @@ package loadshedding
 
 import (
 	//"net/http"
-	"time"
 	"github.com/gin-gonic/gin"
+	"time"
 )
 
 func LoadShedding(maxConcurrent, maxQueue int, queueWait time.Duration) gin.HandlerFunc {
@@ -38,17 +38,15 @@ func LoadShedding(maxConcurrent, maxQueue int, queueWait time.Duration) gin.Hand
 }
 
 func FallbackHandler(c *gin.Context) {
-    // You can provide cached/default data here
-    response := gin.H{
-        "message": "server busy, try again later",
-        "fallback": gin.H{
-            "user": "guest",
-            "recommendations": []string{"item1", "item2"},
-        },
-    }
+	// You can provide cached/default data here
+	response := gin.H{
+		"message": "server busy, try again later",
+		"fallback": gin.H{
+			"user":            "guest",
+			"recommendations": []string{"item1", "item2"},
+		},
+	}
 
-    c.JSON(200, response) // or 503 if you prefer
+	c.JSON(200, response) // or 503 if you prefer
 	c.Abort()
 }
-
-

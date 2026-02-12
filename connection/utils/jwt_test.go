@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateAndParseJWT(t *testing.T) {
@@ -36,7 +36,7 @@ func TestParseJWT_ExpiredToken(t *testing.T) {
 	// generate a token that expires immediately
 	exp := time.Now().Add(-time.Minute)
 	claims := Claims{
-		Username: "bob",
+		Username:  "bob",
 		SessionID: "sess456",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(exp),

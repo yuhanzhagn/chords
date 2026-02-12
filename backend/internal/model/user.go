@@ -1,7 +1,7 @@
 package model
 
 import (
-    "time"
+	"time"
 )
 
 // User represents a chat user
@@ -12,5 +12,5 @@ type User struct {
 	Password  string    `json:"password,omitempty" binding:"required"`
 	CreatedAt time.Time `json:"created_at"`
 
-	Sessions  []UserSession `gorm:"foreignKey:UserID" json:"sessions,omitempty"`
+	Sessions []UserSession `gorm:"foreignKey:UserID" json:"sessions,omitempty"`
 }

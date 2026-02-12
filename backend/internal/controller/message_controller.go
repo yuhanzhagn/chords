@@ -32,9 +32,9 @@ func (mc *MessageController) CreateMessage(c *gin.Context) {
 	}
 
 	msg := model.Message{
-		Content:    input.Content,
-		UserID:     input.UserID,
-		ChatRoomID: input.ChatRoomID,
+		Content: input.Content,
+		UserID:  input.UserID,
+		RoomID:  input.ChatRoomID,
 	}
 
 	if err := mc.MessageService.CreateMessage(&msg); err != nil {

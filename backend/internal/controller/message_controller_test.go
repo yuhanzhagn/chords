@@ -6,7 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-//	"strconv"
+
+	//	"strconv"
 	"testing"
 	"time"
 
@@ -24,8 +25,8 @@ func TestMessageController_CreateMessage_Success(t *testing.T) {
 	controller := NewMessageController(mockService)
 
 	reqBody := map[string]interface{}{
-		"content":     "Hello world",
-		"user_id":     1,
+		"content":      "Hello world",
+		"user_id":      1,
 		"chat_room_id": 2,
 	}
 	body, _ := json.Marshal(reqBody)
@@ -73,8 +74,8 @@ func TestMessageController_CreateMessage_ServiceError(t *testing.T) {
 	controller := NewMessageController(mockService)
 
 	reqBody := map[string]interface{}{
-		"content":     "Hello world",
-		"user_id":     1,
+		"content":      "Hello world",
+		"user_id":      1,
 		"chat_room_id": 2,
 	}
 	body, _ := json.Marshal(reqBody)
@@ -105,8 +106,8 @@ func TestMessageController_GetMessagesByChatRoom_Success(t *testing.T) {
 	controller := NewMessageController(mockService)
 
 	messages := []model.Message{
-		{ID: 1, Content: "Hello", UserID: 1, ChatRoomID: 2, CreatedAt: time.Now()},
-		{ID: 2, Content: "World", UserID: 2, ChatRoomID: 2, CreatedAt: time.Now()},
+		{ID: 1, Content: "Hello", UserID: 1, RoomID: 2, CreatedAt: time.Now()},
+		{ID: 2, Content: "World", UserID: 2, RoomID: 2, CreatedAt: time.Now()},
 	}
 
 	mockService.

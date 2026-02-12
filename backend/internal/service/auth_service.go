@@ -4,10 +4,10 @@ import (
 	"errors"
 	"time"
 
+	"backend/internal/cache"
 	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/utils"
-	"backend/internal/cache"
 	"gorm.io/gorm"
 )
 
@@ -62,11 +62,11 @@ func (s *authService) Login(username, password string) (uint, string, string, st
 	}
 
 	session := model.UserSession{
-		UserID:    user.ID,
-		SessionID: generateSessionID(),
-		CreatedAt: time.Now(),
+		UserID:     user.ID,
+		SessionID:  generateSessionID(),
+		CreatedAt:  time.Now(),
 		LastUsedAt: time.Now(),
-		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		ExpiresAt:  time.Now().Add(7 * 24 * time.Hour),
 	}
 
 	if err := s.repos.UserSession.Create(&session); err != nil {

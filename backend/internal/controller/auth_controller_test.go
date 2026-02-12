@@ -48,7 +48,6 @@ func TestAuthController_Register_Success(t *testing.T) {
 	mockService.AssertExpectations(t)
 }
 
-
 func TestAuthController_Register_InvalidInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -167,7 +166,6 @@ func TestAuthController_Logout_Success(t *testing.T) {
 	require.Contains(t, w.Body.String(), "logout successful")
 	mockService.AssertExpectations(t)
 }
-
 
 func TestAuthController_Logout_MissingHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)

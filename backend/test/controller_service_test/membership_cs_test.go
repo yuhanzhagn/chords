@@ -1,35 +1,35 @@
 package controller_service_test
 
-import(
-    "testing"
-    "time"
+import (
 	"encoding/json"
-//	"errors"
+	"testing"
+	"time"
+	//	"errors"
 	"bytes"
 
-//	"github.com/gin-contrib/cors"
-//    "github.com/stretchr/testify/assert"
+	//	"github.com/gin-contrib/cors"
+	//    "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-//	"github.com/stretchr/testify/mock"
+	//	"github.com/stretchr/testify/mock"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
-//    "gorm.io/driver/sqlite"
-//    "gorm.io/gorm"
+	//    "gorm.io/driver/sqlite"
+	//    "gorm.io/gorm"
 
-    "backend/internal/model"
-    "backend/internal/repo"
-    "backend/internal/service"
-	"backend/internal/controller"
 	"backend/internal/cache"
-//	"backend/internal/middleware/jwtauth"
+	"backend/internal/controller"
+	"backend/internal/model"
+	"backend/internal/repo"
+	"backend/internal/service"
+	//	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
-//	"backend/internal/middleware/logger"
-//	"backend/internal/logrus"
-//	"backend/utils"
+	//	"backend/internal/middleware/logger"
+	//	"backend/internal/logrus"
+	//	"backend/utils"
 )
 
-func setupMembershipRoute(r *gin.Engine){
+func setupMembershipRoute(r *gin.Engine) {
 	db := setupTestDB()
 
 	user := model.User{
@@ -55,21 +55,21 @@ func setupMembershipRoute(r *gin.Engine){
 
 	s := service.NewMembershipService(repos, typedCache)
 
-    membershipController := controller.NewMembershipController(s)
+	membershipController := controller.NewMembershipController(s)
 	memberships := r.Group("/api/memberships")
 	memberships.Use(loadsheddingFunc)
-    // Apply middleware to all /chatrooms routes
+	// Apply middleware to all /chatrooms routes
 	{
-        memberships.POST("/add-user", membershipController.AddUser)
+		memberships.POST("/add-user", membershipController.AddUser)
 		//memberships.POST("/chatrooms", membershipController.GetUserChatRooms)
 		memberships.GET("/:username/chatrooms", func(c *gin.Context) {
-   	 		username := c.Param("username")  // <-- string, no conversion
-    		membershipController.GetUserChatRooms(c, username)
+			username := c.Param("username") // <-- string, no conversion
+			membershipController.GetUserChatRooms(c, username)
 		})
-    }
+	}
 }
 
-func TestMembershipCRUD(t *testing.T){
+func TestMembershipCRUD(t *testing.T) {
 	r := setupBasicMiddleware()
 	setupMembershipRoute(r)
 
@@ -85,7 +85,7 @@ func TestMembershipCRUD(t *testing.T){
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusOK, w.Code)
 
 	//get all
 	req = httptest.NewRequest(http.MethodGet, "/api/memberships/testuser/chatrooms", nil)
@@ -94,6 +94,6 @@ func TestMembershipCRUD(t *testing.T){
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-    require.Contains(t, w.Body.String(), `Test`)
+	require.Contains(t, w.Body.String(), `Test`)
 
 }

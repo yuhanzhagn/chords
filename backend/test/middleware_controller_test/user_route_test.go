@@ -1,34 +1,34 @@
 package middleware_controller
 
-import(
-    "testing"
-    "time"
+import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"bytes"
+	"testing"
+	"time"
 
-//	"github.com/gin-contrib/cors"
-//	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/mock"
+	//	"github.com/gin-contrib/cors"
+	//	"github.com/stretchr/testify/assert"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
-//   "gorm.io/driver/sqlite"
-//    "gorm.io/gorm"
+	//   "gorm.io/driver/sqlite"
+	//    "gorm.io/gorm"
 
-    "backend/internal/model"
-//    "backend/internal/service"
+	"backend/internal/model"
+	//    "backend/internal/service"
 	"backend/internal/controller"
-//	"backend/internal/cache"
+	//	"backend/internal/cache"
 	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
-//	"backend/internal/middleware/logger"
-//	"backend/internal/logrus"
-//	"backend/utils"
+	//	"backend/internal/middleware/logger"
+	//	"backend/internal/logrus"
+	//	"backend/utils"
 )
 
-func setupAuthMiddleware(t *testing.T) gin.HandlerFunc{
+func setupAuthMiddleware(t *testing.T) gin.HandlerFunc {
 	mockService := new(MockAuthService)
 	mockService.
 		On("ValidateJWT", "correct").
@@ -36,7 +36,6 @@ func setupAuthMiddleware(t *testing.T) gin.HandlerFunc{
 		Twice()
 	return jwtauth.NewAuthMiddleware(mockService).Auth()
 }
-
 
 func TestUserCreate(t *testing.T) {
 	r := setupBasicMiddleware(t)
@@ -49,10 +48,10 @@ func TestUserCreate(t *testing.T) {
 	userRoute := r.Group("/api/users")
 	userRoute.Use(loadsheddingFunc)
 	userRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		userRoute.POST("", userController.CreateUser)
 		userRoute.GET("", userController.GetUsers)
-    } 
+	}
 
 	//fail
 	user := model.User{Username: "john", Password: "secret"}
@@ -85,7 +84,7 @@ func TestUserCreate(t *testing.T) {
 	mockService.AssertExpectations(t)
 }
 
-func TestUserGet(t *testing.T){
+func TestUserGet(t *testing.T) {
 	r := setupBasicMiddleware(t)
 
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
@@ -96,10 +95,10 @@ func TestUserGet(t *testing.T){
 	userRoute := r.Group("/api/users")
 	userRoute.Use(loadsheddingFunc)
 	userRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		userRoute.POST("", userController.CreateUser)
 		userRoute.GET("", userController.GetUsers)
-    } 
+	}
 
 	//fail due to db error
 	mockService.On("GetAllUsers").Return([]model.User{}, errors.New("DB error")).Once()
@@ -125,7 +124,6 @@ func TestUserGet(t *testing.T){
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Contains(t, w.Body.String(), "john")
 }
-
 
 // Mock UserService
 type MockUserService struct {

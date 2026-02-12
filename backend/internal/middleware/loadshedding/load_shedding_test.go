@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"backend/internal/middleware/loadshedding"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"backend/internal/middleware/loadshedding"
 )
 
 // Simulated slow handler

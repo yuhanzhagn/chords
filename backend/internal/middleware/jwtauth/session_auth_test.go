@@ -4,86 +4,86 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-//	"strings"
+	//	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
-//	"backend/internal/service"
-	"backend/internal/model"
+	//	"backend/internal/service"
 	"backend/internal/middleware/jwtauth"
+	"backend/internal/model"
 )
 
 func setupRouter(mw gin.HandlerFunc) *gin.Engine {
-    gin.SetMode(gin.TestMode)
+	gin.SetMode(gin.TestMode)
 
-    r := gin.New()
-    r.Use(mw)
-    r.GET("/protected", func(c *gin.Context) {
-        c.JSON(http.StatusOK, gin.H{"ok": true})
-    })
-    return r
+	r := gin.New()
+	r.Use(mw)
+	r.GET("/protected", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	return r
 }
 
 func TestAuthMiddleware_MissingHeader(t *testing.T) {
-    authSvc := &MockAuthService{}
-    mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
+	authSvc := &MockAuthService{}
+	mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
 
-    router := setupRouter(mw.Auth())
+	router := setupRouter(mw.Auth())
 
-    req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-    w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	w := httptest.NewRecorder()
 
-    router.ServeHTTP(w, req)
+	router.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusUnauthorized, w.Code)
-    require.Contains(t, w.Body.String(), "Missing or invalid Authorization header")
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	require.Contains(t, w.Body.String(), "Missing or invalid Authorization header")
 }
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
-    authSvc := &MockAuthService{
-        validateFn: func(token string) error {
-            return errors.New("invalid token")
-        },
-    }
-    mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
+	authSvc := &MockAuthService{
+		validateFn: func(token string) error {
+			return errors.New("invalid token")
+		},
+	}
+	mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
 
 	authSvc.On("ValidateJWT", "bad-token").Return(nil, nil, errors.New("invalid token"))
 
-    router := setupRouter(mw.Auth())
+	router := setupRouter(mw.Auth())
 
-    req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-    req.Header.Set("Authorization", "Bearer bad-token")
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer bad-token")
 
-    w := httptest.NewRecorder()
-    router.ServeHTTP(w, req)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusUnauthorized, w.Code)
-    require.Contains(t, w.Body.String(), "invalid token")
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	require.Contains(t, w.Body.String(), "invalid token")
 }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
-    authSvc := &MockAuthService{
-        validateFn: func(token string) error {
-            require.Equal(t, "good-token", token)
-            return nil
-        },
-    }
-    mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
+	authSvc := &MockAuthService{
+		validateFn: func(token string) error {
+			require.Equal(t, "good-token", token)
+			return nil
+		},
+	}
+	mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
 	authSvc.On("ValidateJWT", "good-token").Return(nil, nil, nil)
-    router := setupRouter(mw.Auth())
+	router := setupRouter(mw.Auth())
 
-    req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-    req.Header.Set("Authorization", "Bearer good-token")
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer good-token")
 
-    w := httptest.NewRecorder()
-    router.ServeHTTP(w, req)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 
-    require.Equal(t, http.StatusOK, w.Code)
-    require.Contains(t, w.Body.String(), `"ok":true`)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), `"ok":true`)
 }
 
 type MockAuthService struct {

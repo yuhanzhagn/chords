@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"backend/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
 type ChatRoomController struct {
@@ -83,17 +83,17 @@ func (c *ChatRoomController) DeleteChatRoom(ctx *gin.Context) {
 
 // GET /chatrooms/search?q=keyword
 func (c *ChatRoomController) SearchChatRooms(ctx *gin.Context) {
-    keyword := ctx.Query("q")
-    if keyword == "" {
-        ctx.JSON(http.StatusBadRequest, gin.H{"error": "query keyword required"})
-        return
-    }
+	keyword := ctx.Query("q")
+	if keyword == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "query keyword required"})
+		return
+	}
 
-    chatRooms, err := c.chatRoomService.SearchChatRoomsByName(keyword)
-    if err != nil {
-        ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	chatRooms, err := c.chatRoomService.SearchChatRoomsByName(keyword)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-    ctx.JSON(http.StatusOK, gin.H{"data": chatRooms})
+	ctx.JSON(http.StatusOK, gin.H{"data": chatRooms})
 }

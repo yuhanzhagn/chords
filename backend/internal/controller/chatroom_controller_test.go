@@ -3,7 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
-//	"errors"
+	//	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -44,7 +44,6 @@ func TestChatRoomController_CreateChatRoom_Success(t *testing.T) {
 	require.Contains(t, w.Body.String(), `"general"`)
 	mockService.AssertExpectations(t)
 }
-
 
 func TestChatRoomController_CreateChatRoom_InvalidInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)

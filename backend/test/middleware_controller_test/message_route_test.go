@@ -1,37 +1,37 @@
 package middleware_controller
 
-import(
-    "testing"
-    "time"
+import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"bytes"
+	"testing"
+	"time"
 
-//	"github.com/gin-contrib/cors"
-//	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	//	"github.com/gin-contrib/cors"
+	//	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-//	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	//	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
-//   "gorm.io/driver/sqlite"
-//    "gorm.io/gorm"
+	//   "gorm.io/driver/sqlite"
+	//    "gorm.io/gorm"
 
-    "backend/internal/model"
-//    "backend/internal/service"
+	"backend/internal/model"
+	//    "backend/internal/service"
 	"backend/internal/controller"
-//	"backend/internal/cache"
-//	"backend/internal/middleware/jwtauth"
+	//	"backend/internal/cache"
+	//	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
-//	"backend/internal/middleware/logger"
-//	"backend/internal/logrus"
-//	"backend/utils"
+	//	"backend/internal/middleware/logger"
+	//	"backend/internal/logrus"
+	//	"backend/utils"
 )
 
 type Msg struct {
-    Content    string `json:"content"`
-    UserID     uint   `json:"user_id"`
-    ChatRoomID uint   `json:"chat_room_id"`
+	Content    string `json:"content"`
+	UserID     uint   `json:"user_id"`
+	ChatRoomID uint   `json:"chat_room_id"`
 }
 
 func TestMeesageCreate(t *testing.T) {
@@ -45,9 +45,9 @@ func TestMeesageCreate(t *testing.T) {
 	messageRoute := r.Group("/api")
 	messageRoute.Use(loadsheddingFunc)
 	messageRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		messageRoute.POST("/messages", messageController.CreateMessage)
-    } 
+	}
 
 	//fail
 	msg := Msg{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
@@ -91,15 +91,15 @@ func TestGetMessageByChatRoom(t *testing.T) {
 	messageRoute := r.Group("/api")
 	messageRoute.Use(loadsheddingFunc)
 	messageRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		messageRoute.GET("/chatrooms/:id/messages", messageController.GetMessagesByChatRoom)
-    } 
+	}
 
 	//fail
 	mockService.
-	On("GetMessagesByChatRoom", uint(1)).
-	Once().
-	Return([]model.Message{}, errors.New("DB error"))
+		On("GetMessagesByChatRoom", uint(1)).
+		Once().
+		Return([]model.Message{}, errors.New("DB error"))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/chatrooms/1/messages", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -114,9 +114,9 @@ func TestGetMessageByChatRoom(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-	On("GetMessagesByChatRoom",  uint(1)).
-	Once().
-	Return([]model.Message{model.Message{Content: "Where is my mind"}}, nil)
+		On("GetMessagesByChatRoom", uint(1)).
+		Once().
+		Return([]model.Message{model.Message{Content: "Where is my mind"}}, nil)
 
 	req = httptest.NewRequest(http.MethodGet, "/api/chatrooms/1/messages", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -140,15 +140,15 @@ func TestMessageDelete(t *testing.T) {
 	messageRoute := r.Group("/api")
 	messageRoute.Use(loadsheddingFunc)
 	messageRoute.Use(setupAuthMiddleware(t))
-    {
+	{
 		messageRoute.DELETE("/messages/:id", messageController.DeleteMessage)
-    } 
+	}
 
 	//fail
 	mockService.
-	On("DeleteMessage", uint(1)).
-	Once().
-	Return(errors.New("DB error"))
+		On("DeleteMessage", uint(1)).
+		Once().
+		Return(errors.New("DB error"))
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/messages/1", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -163,9 +163,9 @@ func TestMessageDelete(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-	On("DeleteMessage",  uint(1)).
-	Once().
-	Return(nil)
+		On("DeleteMessage", uint(1)).
+		Once().
+		Return(nil)
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/messages/1", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -176,7 +176,6 @@ func TestMessageDelete(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, w.Code)
 	//mockService.AssertExpectations(t)
 }
-
 
 type MockMessageService struct {
 	mock.Mock

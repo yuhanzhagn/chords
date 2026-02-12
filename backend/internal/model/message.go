@@ -1,14 +1,14 @@
 package model
 
 import (
-    "time"
+	"time"
 )
 
 // Message represents a message sent in a chat room
 type Message struct {
-    ID         uint      `gorm:"primaryKey"`
-    Content    string    `gorm:"type:text;not null"`
-    UserID     uint      `gorm:"not null"`  // Foreign key to User
-    ChatRoomID uint      `gorm:"not null"`  // Foreign key to ChatRoom
-    CreatedAt  time.Time
+	ID        uint   `gorm:"primaryKey"`
+	Content   string `gorm:"type:text;not null"`
+	UserID    uint   `gorm:"not null"` // Foreign key to User
+	RoomID    uint   `gorm:"not null"` // Foreign key to ChatRoom
+	CreatedAt time.Time
 }
