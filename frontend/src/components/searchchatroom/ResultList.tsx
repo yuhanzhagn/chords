@@ -1,7 +1,16 @@
-import React from "react";
 import "./SearchPage.css"; // optional CSS for results
 
-export default function ResultList({ results, onRoomClick }) {
+interface Room {
+  ID: number;
+  Name: string;
+}
+
+interface ResultListProps {
+  results: Room[];
+  onRoomClick: (room: Room) => void;
+}
+
+export default function ResultList({ results, onRoomClick }: ResultListProps) {
   return (
     <ul className="results-list">
       {results.map(room => (
@@ -16,4 +25,3 @@ export default function ResultList({ results, onRoomClick }) {
     </ul>
   );
 }
-

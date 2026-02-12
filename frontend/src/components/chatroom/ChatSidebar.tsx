@@ -1,7 +1,17 @@
-import React from "react";
+interface ChatroomSummary {
+  ID: number;
+  Name: string;
+}
+
+interface ChatSidebarProps {
+  chatrooms: ChatroomSummary[];
+  loading: boolean;
+  selectedChatroom: ChatroomSummary | null;
+  onSelectChatroom: (room: ChatroomSummary) => void;
+}
 //import CreateChatroomButton from "./CreateChatroomButton";
 
-const ChatSidebar = ({ chatrooms, loading, selectedChatroom, onSelectChatroom }) => (
+const ChatSidebar = ({ chatrooms, loading, selectedChatroom, onSelectChatroom }: ChatSidebarProps) => (
   <aside className="chat-sidebar">
     <h2 className="chat-sidebar-title">Chat Rooms</h2>
 

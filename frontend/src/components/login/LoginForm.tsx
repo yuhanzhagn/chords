@@ -1,22 +1,36 @@
-import React, { useState } from 'react';
-import {useUser} from '../context/UserProvider';
-import {useNavigate} from 'react-router-dom';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-function LoginForm({ setIsAuth }) {
+interface LoginFormProps {
+  setIsAuth: (isAuth: boolean) => void;
+}
+
+interface LoginResponse {
+  token: string;
+  sessionID: string;
+  id: string | number;
+}
+
+function LoginForm({ setIsAuth }: LoginFormProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      var uname = username;
-      const response = await fetch(`http://${process.env.REACT_APP_URL}/auth/login`, {
+      const apiUrl = process.env.REACT_APP_URL;
+      if (!apiUrl) {
+        throw new Error('Missing REACT_APP_URL environment variable');
+      }
+
+      const response = await fetch(`http://${apiUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -26,13 +40,13 @@ function LoginForm({ setIsAuth }) {
         throw new Error('Invalid credentials');
       }
 
-      const data = await response.json();
+      const data: LoginResponse = await response.json();
       const token = data.token;
       const sessionID = data.sessionID;
       const userInfo = {
         id: data.id,
-        username: uname,
-        };
+        username,
+      };
 
       if (!token) throw new Error('No token received from server');
       // console.log(token);
@@ -41,13 +55,12 @@ function LoginForm({ setIsAuth }) {
       localStorage.setItem('user', JSON.stringify(userInfo));
       localStorage.setItem('sessionID', sessionID);
 
-      // Optionally pass user data to parent
-      //onLogin?.(data);
+      
       setIsAuth(true);
       navigate('../chatroom');
       console.log('Logged in successfully. JWT stored.');
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -86,4 +99,3 @@ function LoginForm({ setIsAuth }) {
 }
 
 export default LoginForm;
-

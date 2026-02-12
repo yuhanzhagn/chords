@@ -1,9 +1,15 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
 
-const ChatRoom = ({ roomId, userId }) => {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const ws = useRef(null);
+interface ChatRoomBackupProps {
+  roomId: string;
+  userId: string;
+}
+
+const ChatRoom = ({ roomId, userId }: ChatRoomBackupProps) => {
+  const [messages, setMessages] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const ws = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     // Connect to your Go WebSocket backend
@@ -34,8 +40,8 @@ const ChatRoom = ({ roomId, userId }) => {
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") {
+  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
       sendMessage();
     }
   };
@@ -67,7 +73,7 @@ const ChatRoom = ({ roomId, userId }) => {
   );
 };
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   container: {
     width: "400px",
     margin: "0 auto",
@@ -99,4 +105,3 @@ const styles = {
 };
 
 export default ChatRoom;
-

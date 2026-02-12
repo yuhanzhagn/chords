@@ -1,20 +1,35 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 
-function RegisterForm({ onRegister }) {
+interface RegisterResponse {
+  token?: string;
+  [key: string]: unknown;
+}
+
+interface RegisterFormProps {
+  onRegister?: (data: RegisterResponse) => void;
+}
+
+function RegisterForm({ onRegister }: RegisterFormProps) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
+      const apiUrl = process.env.REACT_APP_URL;
+      if (!apiUrl) {
+        throw new Error('Missing REACT_APP_URL environment variable');
+      }
+
       // POST to your backend registration endpoint
-      const response = await fetch(`http://${process.env.REACT_APP_URL}/auth/register`, {
+      const response = await fetch(`http://${apiUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -24,7 +39,7 @@ function RegisterForm({ onRegister }) {
         throw new Error('Registration failed');
       }
 
-      const data = await response.json();
+      const data: RegisterResponse = await response.json();
 
       // If backend returns a JWT token, store it
       if (data.token) {
@@ -35,8 +50,8 @@ function RegisterForm({ onRegister }) {
       onRegister?.(data);
 
       console.log('User registered successfully');
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -88,4 +103,3 @@ function RegisterForm({ onRegister }) {
 }
 
 export default RegisterForm;
-

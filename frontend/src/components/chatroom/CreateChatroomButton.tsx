@@ -1,11 +1,12 @@
-import React, { useState, useContext} from "react";
-import { RefreshContext } from "./RefreshContext"
+import { useState, useContext } from 'react';
+import type { CSSProperties } from 'react';
+import { RefreshContext } from './RefreshContext';
 
 function CreateChatroomButton() {
   const [showPopup, setShowPopup] = useState(false);
   const [chatroomName, setChatroomName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const triggerParentRefresh = useContext(RefreshContext);
   const jwttoken = localStorage.getItem("jwt");
   const ipaddr = `${process.env.REACT_APP_URL}`
@@ -49,9 +50,9 @@ function CreateChatroomButton() {
       triggerParentRefresh();
       // Close popup after successful creation
       closePopup();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Failed to create chatroom');
     } finally {
       setLoading(false);
     }
@@ -89,7 +90,7 @@ function CreateChatroomButton() {
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   overlay: {
     position: "fixed",
     top: 0,
@@ -121,4 +122,3 @@ const styles = {
 };
 
 export default CreateChatroomButton;
-

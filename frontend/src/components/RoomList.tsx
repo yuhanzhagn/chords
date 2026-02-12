@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import ChatRoom from "./components/chatroom/ChatRoom";
+import { useState } from "react";
+import ChatRoom from "./chatroom/ChatRoom";
 
 function App() {
   const [userId, setUserId] = useState("");
@@ -37,4 +37,3 @@ function App() {
 }
 
 export default App;
-

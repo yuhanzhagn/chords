@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import TestBackendButton from './TestBackendButton';
+import { useEffect, useState } from 'react';
 //import { useUser } from '../context/UserProvider';
 import { useNavigate } from 'react-router-dom';
 
 
-function HomePage({setIsAuth}) {
-  const [token, setToken] = useState(null);
+interface HomePageProps {
+  setIsAuth: (isAuth: boolean) => void;
+}
+
+function HomePage({ setIsAuth }: HomePageProps) {
+  const [token, setToken] = useState<string | null>(null);
   const navigate = useNavigate();
  // const { removeUserInfo } = useUser();
 
@@ -23,11 +26,12 @@ function HomePage({setIsAuth}) {
 
 const handleLogout = async () => {
   const token = localStorage.getItem('jwt');
+  const apiUrl = process.env.REACT_APP_URL;
 
   // Optional: notify backend to block token
-  if (token) {
+  if (token && apiUrl) {
     try {
-      await fetch(`http://${process.env.REACT_APP_URL}/auth/logout`, {
+      await fetch(`http://${apiUrl}/auth/logout`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
@@ -37,8 +41,8 @@ const handleLogout = async () => {
         })
       });
         setIsAuth(false);
-    } catch (err) {
-      console.error("Logout request failed:", err);
+    } catch (err: unknown) {
+      console.error('Logout request failed:', err);
     }
   }
 
@@ -71,4 +75,3 @@ const handleLogout = async () => {
 }
 
 export default HomePage;
-

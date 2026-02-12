@@ -1,14 +1,29 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import MessageList from "./MessageList";
 import MessageComposer from "./MessageComposer";
+import type { ChatMessage } from './MessageList';
 
-const ChatWindow = ({ chatroom, messages, loading, onSendMessage }) => {
+interface ChatroomInfo {
+  ID: number;
+  Name: string;
+}
+
+interface ChatWindowProps {
+  chatroom: ChatroomInfo | null;
+  messages: ChatMessage[];
+  loading: boolean;
+  onSendMessage: (text: string) => void;
+}
+
+const ChatWindow = ({ chatroom, messages, loading, onSendMessage }: ChatWindowProps) => {
   const [draft, setDraft] = useState("");
+  console.log("messages in ChatWindow:", messages);
 
   useEffect(() => {
     setDraft("");
-  }, [chatroom?.id]);
-  const handleSubmit = (e) => {
+  }, [chatroom?.ID]);
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!draft.trim()) return;
 
@@ -27,7 +42,7 @@ const ChatWindow = ({ chatroom, messages, loading, onSendMessage }) => {
   return (
     <section className="chat-window">
       <header className="chat-header">
-        <h2 className="chat-title">{chatroom.name}</h2>
+        <h2 className="chat-title">{chatroom.Name}</h2>
       </header>
 
       <MessageList messages={messages} loading={loading} />

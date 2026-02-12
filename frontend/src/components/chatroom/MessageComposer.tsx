@@ -1,6 +1,12 @@
-import React from "react";
+import type { FormEvent } from 'react';
 
-const MessageComposer = ({ draft, onDraftChange, onSubmit }) => (
+interface MessageComposerProps {
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+}
+
+const MessageComposer = ({ draft, onDraftChange, onSubmit }: MessageComposerProps) => (
   <form className="chat-composer" onSubmit={onSubmit}>
     <input
       type="text"
