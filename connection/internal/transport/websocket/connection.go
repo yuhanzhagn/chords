@@ -20,8 +20,8 @@ var upgrader = websocket.Upgrader{
 // subscribe, message
 type WSMessage struct {
 	MsgType string `json:"MsgType"`
-	UserID  uint   `json:"UserID"`
-	RoomID  uint   `json:"RoomID"`
+	UserID  uint32 `json:"UserID"`
+	RoomID  uint32 `json:"RoomID"`
 	Message string `json:"Message"`
 	TempID  string `json:"TempID"`
 }
@@ -39,7 +39,7 @@ type Connection struct {
 }
 
 func ServeWs(
-	userID uint,
+	userID uint32,
 	w http.ResponseWriter,
 	r *http.Request,
 	hub *Hub,

@@ -26,8 +26,8 @@ func WsAuthMiddleware(next http.Handler) http.Handler {
 func WsHandler(hub *websocket.Hub, msgService *service.MessageService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// userID := r.Context().Value("userID").(uint)
-		userID := (uint)(10)
+		// userID := r.Context().Value("userID").(uint32)
+		userID := uint32(10)
 		websocket.ServeWs(userID, w, r, hub, msgService)
 	})
 }

@@ -5,26 +5,26 @@ import "sync"
 
 type ConnectionStore interface {
 	AddClient(c *Client)
-	RemoveClient(clientID uint)
+	RemoveClient(clientID uint32)
 
-	AddClientToRoom(clientID uint, roomID uint)
-	RemoveClientFromRoom(clientID uint, roomID uint)
+	AddClientToRoom(clientID uint32, roomID uint32)
+	RemoveClientFromRoom(clientID uint32, roomID uint32)
 
-	GetClient(clientID uint) *Client
-	GetClientsInRoom(roomID uint) []*Client
+	GetClient(clientID uint32) *Client
+	GetClientsInRoom(roomID uint32) []*Client
 	GetAllClients() []*Client
 }
 
 type MemoryStore struct {
 	mu      sync.RWMutex
-	clients map[uint]*Client
-	rooms   map[uint]map[uint]*Client // roomID -> clientID -> client
+	clients map[uint32]*Client
+	rooms   map[uint32]map[uint32]*Client // roomID -> clientID -> client
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		clients: make(map[uint]*Client),
-		rooms:   make(map[uint]map[uint]*Client),
+		clients: make(map[uint32]*Client),
+		rooms:   make(map[uint32]map[uint32]*Client),
 	}
 }
 
@@ -34,7 +34,7 @@ func (s *MemoryStore) AddClient(c *Client) {
 	s.clients[c.ID] = c
 }
 
-func (s *MemoryStore) RemoveClient(clientID uint) {
+func (s *MemoryStore) RemoveClient(clientID uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -44,18 +44,18 @@ func (s *MemoryStore) RemoveClient(clientID uint) {
 	}
 }
 
-func (s *MemoryStore) GetClient(clientID uint) *Client {
+func (s *MemoryStore) GetClient(clientID uint32) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.clients[clientID]
 }
 
-func (s *MemoryStore) AddClientToRoom(clientID uint, roomID uint) {
+func (s *MemoryStore) AddClientToRoom(clientID uint32, roomID uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, ok := s.rooms[roomID]; !ok {
-		s.rooms[roomID] = make(map[uint]*Client)
+		s.rooms[roomID] = make(map[uint32]*Client)
 	}
 
 	if c, ok := s.clients[clientID]; ok {
@@ -63,7 +63,7 @@ func (s *MemoryStore) AddClientToRoom(clientID uint, roomID uint) {
 	}
 }
 
-func (s *MemoryStore) RemoveClientFromRoom(clientID uint, roomID uint) {
+func (s *MemoryStore) RemoveClientFromRoom(clientID uint32, roomID uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -72,7 +72,7 @@ func (s *MemoryStore) RemoveClientFromRoom(clientID uint, roomID uint) {
 	}
 }
 
-func (s *MemoryStore) GetClientsInRoom(roomID uint) []*Client {
+func (s *MemoryStore) GetClientsInRoom(roomID uint32) []*Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

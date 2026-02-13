@@ -1,22 +1,22 @@
 package websocket
 
 import (
-	"connection/internal/platform/kafka"
 	"connection/internal/service"
+	kafkapb "connection/proto/kafka"
 	"encoding/json"
 	"log"
 	"sync"
 )
 
 type Client struct {
-	ID         uint
+	ID         uint32
 	Conn       *Connection
 	SendChan   chan []byte
 	msgService service.MessageService
 }
 
 type Room struct {
-	ID      uint
+	ID      uint32
 	Clients map[*Client]bool
 	Lock    sync.Mutex
 }
@@ -33,19 +33,19 @@ func (h *Hub) AddClient(client *Client) {
 	h.store.AddClient(client)
 }
 
-func (h *Hub) AddClientToRoom(clientID uint, roomID uint) {
+func (h *Hub) AddClientToRoom(clientID uint32, roomID uint32) {
 	h.store.AddClientToRoom(clientID, roomID)
 }
 
-func (h *Hub) RemoveClient(clientID uint) {
+func (h *Hub) RemoveClient(clientID uint32) {
 	h.store.RemoveClient(clientID)
 }
 
-func (h *Hub) RemoveClientFromRoom(clientID uint, roomID uint) {
+func (h *Hub) RemoveClientFromRoom(clientID uint32, roomID uint32) {
 	h.store.RemoveClientFromRoom(clientID, roomID)
 }
 
-func (h *Hub) Broadcast(roomID uint, msg []byte) {
+func (h *Hub) Broadcast(roomID uint32, msg []byte) {
 	clients := h.store.GetClientsInRoom(roomID)
 	for _, c := range clients {
 		select {
@@ -56,12 +56,12 @@ func (h *Hub) Broadcast(roomID uint, msg []byte) {
 	}
 }
 
-func (h *Hub) HandleOutboundEvent(event kafka.KafkaEvent) {
+func (h *Hub) HandleOutboundEvent(event kafkapb.KafkaEvent) {
 	// Unmarshal the outbound message to get roomID and body
-	log.Printf("Hub handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserID, event.RoomID, event.MsgType)
+	log.Printf("Hub handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserId, event.RoomId, event.MsgType)
 	rawbytes, err := json.Marshal(event)
 	if err != nil {
 		return
 	}
-	h.Broadcast(event.RoomID, rawbytes)
+	h.Broadcast(event.RoomId, rawbytes)
 }

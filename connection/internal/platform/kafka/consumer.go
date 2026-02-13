@@ -8,20 +8,22 @@ import (
 	"log"
 
 	"github.com/IBM/sarama"
+
+	kafkapb "connection/proto/kafka"
 )
 
 type WsOutboundConsumer struct {
 	consumer sarama.ConsumerGroup
 	groupID  string
 	topics   []string
-	handler  func(event KafkaEvent)
+	handler  func(event kafkapb.KafkaEvent)
 }
 
 func NewWsOutboundConsumer(
 	brokers []string,
 	groupID string,
 	topics []string,
-	handler func(event KafkaEvent),
+	handler func(event kafkapb.KafkaEvent),
 ) (*WsOutboundConsumer, error) {
 
 	config := sarama.NewConfig()
@@ -44,7 +46,7 @@ func NewWsOutboundConsumer(
 }
 
 type wsOutboundHandler struct {
-	handle func(event KafkaEvent)
+	handle func(event kafkapb.KafkaEvent)
 }
 
 func (h *wsOutboundHandler) Setup(_ sarama.ConsumerGroupSession) error {
@@ -64,7 +66,7 @@ func (h *wsOutboundHandler) ConsumeClaim(
 
 	for msg := range claim.Messages() {
 
-		var event KafkaEvent
+		var event kafkapb.KafkaEvent
 		if err := json.Unmarshal(msg.Value, &event); err != nil {
 			log.Println("[kafka] unmarshal error:", err)
 			continue

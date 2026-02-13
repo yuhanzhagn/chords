@@ -33,6 +33,7 @@ interface SocketPayload {
   Message?: string;
   Content?: string;
   TempID: string;
+  CreatedAt: number;
   [key: string]: unknown;
 }
 
@@ -112,6 +113,7 @@ const ChatRoom = (_props: ChatRoomProps) => {
         UserID: user.id,
         Message: jwttoken,
         TempID: uuidv4(),
+        CreatedAt: Date.now(),
       };
       socket.send(JSON.stringify(authPayload));
 
@@ -122,12 +124,14 @@ const ChatRoom = (_props: ChatRoomProps) => {
           UserID: user.id,
           Message: '',
           TempID: uuidv4(),
+          CreatedAt: Date.now(),
         };
         socket.send(JSON.stringify(joinPayload));
       }
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
+      console.log('Socket message payload:', event.data, selectedChatroomRef.current);
       try {
         const payload = JSON.parse(event.data) as SocketPayload;
 
@@ -140,6 +144,7 @@ const ChatRoom = (_props: ChatRoomProps) => {
                 status: 'sent',
                 fromself: payload.UserID === user.id,
               };
+              console.log('Received message', modeledMsg);
 
               if (payload.UserID !== user.id) {
                 setMessages((prev) => [...prev, modeledMsg]);
@@ -202,11 +207,12 @@ const ChatRoom = (_props: ChatRoomProps) => {
 
     if (selectedChatroomRef.current && socketRef.current?.readyState === WebSocket.OPEN) {
       const leavePayload: SocketPayload = {
-        MsgType: 'leave',
+        MsgType: 'join',
         RoomID: selectedChatroomRef.current.ID,
         UserID: user.id,
         Message: '',
         TempID: uuidv4(),
+        CreatedAt: Date.now(),
       };
       socketRef.current.send(JSON.stringify(leavePayload));
     }
@@ -245,6 +251,7 @@ const ChatRoom = (_props: ChatRoomProps) => {
           UserID: user.id,
           Message: '',
           TempID: uuidv4(),
+          CreatedAt: Date.now(),
         };
         socketRef.current.send(JSON.stringify(joinPayload));
       }
@@ -268,6 +275,7 @@ const ChatRoom = (_props: ChatRoomProps) => {
       UserID: user.id,
       Content: text,
       TempID: uuidv4(),
+      CreatedAt: Date.now(),
     };
 
     socketRef.current.send(JSON.stringify(payload));

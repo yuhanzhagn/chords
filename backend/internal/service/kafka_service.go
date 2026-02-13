@@ -4,6 +4,7 @@ import (
 	"backend/internal/kafka"
 	"encoding/json"
 	"log"
+	"time"
 )
 
 // MessageProducer defines the contract for sending messages to a broker
@@ -58,6 +59,7 @@ func (s *KafkaService) handleLeave(event kafka.KafkaEvent) {
 
 // HandleOutgoingMessage handles messages consumed from Kafka
 func (s *KafkaService) HandleOutgoingMessage(event kafka.KafkaEvent) error {
+	event.CreateAt = time.Now().Unix()
 	rawbyte, err := json.Marshal(event)
 	if err != nil {
 		log.Println("Error marshaling event:", err)
