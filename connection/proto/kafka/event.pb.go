@@ -31,7 +31,7 @@ type KafkaEvent struct {
 	MsgType       string                 `protobuf:"bytes,4,opt,name=msg_type,json=MsgType,proto3" json:"msg_type,omitempty"`
 	Content       []byte                 `protobuf:"bytes,5,opt,name=content,json=Content,proto3" json:"content,omitempty"`
 	TempId        string                 `protobuf:"bytes,6,opt,name=temp_id,json=TempID,proto3" json:"temp_id,omitempty"`
-	CreateAt      int64                  `protobuf:"varint,7,opt,name=create_at,json=CreateAt,proto3" json:"create_at,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=CreateAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -108,9 +108,9 @@ func (x *KafkaEvent) GetTempId() string {
 	return ""
 }
 
-func (x *KafkaEvent) GetCreateAt() int64 {
+func (x *KafkaEvent) GetCreatedAt() int64 {
 	if x != nil {
-		return x.CreateAt
+		return x.CreatedAt
 	}
 	return 0
 }
@@ -119,7 +119,7 @@ var File_proto_kafka_event_proto protoreflect.FileDescriptor
 
 const file_proto_kafka_event_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/kafka/event.proto\x12\bkafka.v1\"\xb9\x01\n" +
+	"\x17proto/kafka/event.proto\x12\bkafka.v1\"\xba\x01\n" +
 	"\n" +
 	"KafkaEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02ID\x12\x17\n" +
@@ -127,8 +127,9 @@ const file_proto_kafka_event_proto_rawDesc = "" +
 	"\aroom_id\x18\x03 \x01(\rR\x06RoomID\x12\x19\n" +
 	"\bmsg_type\x18\x04 \x01(\tR\aMsgType\x12\x18\n" +
 	"\acontent\x18\x05 \x01(\fR\aContent\x12\x17\n" +
-	"\atemp_id\x18\x06 \x01(\tR\x06TempID\x12\x1b\n" +
-	"\tcreate_at\x18\a \x01(\x03R\bCreateAtB/Z-connection/internal/platform/kafka/pb;kafkapbb\x06proto3"
+	"\atemp_id\x18\x06 \x01(\tR\x06TempID\x12\x1c\n" +
+	"\n" +
+	"created_at\x18\a \x01(\x03R\bCreateAtB/Z-connection/internal/platform/kafka/pb;kafkapbb\x06proto3"
 
 var (
 	file_proto_kafka_event_proto_rawDescOnce sync.Once

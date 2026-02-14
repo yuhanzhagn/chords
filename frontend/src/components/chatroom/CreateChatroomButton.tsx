@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import type { CSSProperties } from 'react';
 import { RefreshContext } from './RefreshContext';
+import './chat.css'
 
 function CreateChatroomButton() {
   const [showPopup, setShowPopup] = useState(false);

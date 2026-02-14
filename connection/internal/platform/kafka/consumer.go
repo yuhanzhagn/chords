@@ -16,14 +16,14 @@ type WsOutboundConsumer struct {
 	consumer sarama.ConsumerGroup
 	groupID  string
 	topics   []string
-	handler  func(event kafkapb.KafkaEvent)
+	handler  func(event *kafkapb.KafkaEvent)
 }
 
 func NewWsOutboundConsumer(
 	brokers []string,
 	groupID string,
 	topics []string,
-	handler func(event kafkapb.KafkaEvent),
+	handler func(event *kafkapb.KafkaEvent),
 ) (*WsOutboundConsumer, error) {
 
 	config := sarama.NewConfig()
@@ -46,7 +46,7 @@ func NewWsOutboundConsumer(
 }
 
 type wsOutboundHandler struct {
-	handle func(event kafkapb.KafkaEvent)
+	handle func(event *kafkapb.KafkaEvent)
 }
 
 func (h *wsOutboundHandler) Setup(_ sarama.ConsumerGroupSession) error {
@@ -66,7 +66,7 @@ func (h *wsOutboundHandler) ConsumeClaim(
 
 	for msg := range claim.Messages() {
 
-		var event kafkapb.KafkaEvent
+		var event *kafkapb.KafkaEvent
 		if err := json.Unmarshal(msg.Value, &event); err != nil {
 			log.Println("[kafka] unmarshal error:", err)
 			continue

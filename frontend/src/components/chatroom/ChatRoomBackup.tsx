@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
+import './chat.css'
 
 interface ChatRoomBackupProps {
   roomId: string;

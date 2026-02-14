@@ -56,7 +56,7 @@ func (h *Hub) Broadcast(roomID uint32, msg []byte) {
 	}
 }
 
-func (h *Hub) HandleOutboundEvent(event kafkapb.KafkaEvent) {
+func (h *Hub) HandleOutboundEvent(event *kafkapb.KafkaEvent) {
 	// Unmarshal the outbound message to get roomID and body
 	log.Printf("Hub handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserId, event.RoomId, event.MsgType)
 	rawbytes, err := json.Marshal(event)

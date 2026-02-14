@@ -1,15 +1,5 @@
 import { useReducer } from "react";
-
-export interface ChatMessage {
-  ID: number;
-  UserID: string | number;
-  RoomID: number;
-  Content: string;
-  CreatedAt: string;
-  TempID: string;
-  status: "pending" | "sent";
-  fromself: boolean;
-}
+import {ChatMessage} from "../types/chat";
 
 type Action =
   | { type: "LOAD"; payload: ChatMessage[] }

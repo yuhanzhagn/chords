@@ -12,5 +12,5 @@ message KafkaEvent {
   string msg_type = 4 [json_name = "MsgType"];
   bytes content = 5 [json_name = "Content"];
   string temp_id = 6 [json_name = "TempID"];
-  int64 create_at = 7 [json_name = "CreateAt"];
+  int64 created_at = 7 [json_name = "CreateAt"];
 }

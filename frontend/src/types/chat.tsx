@@ -4,13 +4,13 @@ export interface Chatroom {
 }
 
 export interface ChatMessage {
-  ID: number;
+  ID: string | number;
   UserID: string | number;
   RoomID: number;
   Content: string;
   CreatedAt: string;
   TempID: string;
-  status: "pending" | "sent";
+  status: "pending" | "sent" | "failed";
   fromself: boolean;
 }
 

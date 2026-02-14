@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react';
+import './chat.css'
 
 interface MessageComposerProps {
   draft: string;

@@ -1,3 +1,5 @@
+import './chat.css'
+
 interface ChatroomSummary {
   ID: number;
   Name: string;

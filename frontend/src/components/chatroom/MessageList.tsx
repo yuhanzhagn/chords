@@ -1,16 +1,5 @@
-export interface ChatMessage {
-  ID?: number;
-  _id?: string;
-  timestamp?: string;
-  UserID?: string | number;
-  RoomID?: string | number;
-  Content?: string;
-  status?: 'sent' | 'pending' | 'failed' | string;
-  fromself?: boolean;
-  CreatedAt?: string;
-  createdAt?: string;
-  TempID?: string;
-}
+import './chat.css'
+import { ChatMessage } from '../../types/chat';
 
 const getMessageClass = (msg: ChatMessage): string => {
   if (msg.status === "failed") return "chat-message-self failed";
@@ -32,7 +21,7 @@ const MessageList = ({ messages, loading }: MessageListProps) => {
     {!loading && messages.length === 0 && <p>No messages yet. Say hello!</p>}
 
     {messages.map((msg) => (
-      <article key={msg.ID || msg._id || msg.timestamp || msg.TempID} className={getMessageClass(msg)}>
+      <article key={msg.ID || msg.CreatedAt || msg.TempID} className={getMessageClass(msg)}>
         <div className="chat-message-header">
           <span className="chat-message-author">{msg.UserID || "Anonymous"}</span>
           <span className="chat-message-timestamp">

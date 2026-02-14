@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import MessageList from "./MessageList";
 import MessageComposer from "./MessageComposer";
-import type { ChatMessage } from './MessageList';
+import type { ChatMessage } from '../../types/chat';
+import './chat.css'
+
 
 interface ChatroomInfo {
   ID: number;

@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import ChatSidebar from "./ChatSidebar";
 import ChatWindow from "./ChatWindow";
 import { useChatrooms } from "../../hooks/useChatrooms";
 import { useMessages } from "../../hooks/useMessages";
 import { useChatSocket } from "../../hooks/useChatSocket";
+import './chat.css'
+import { KafkaEvent } from "../../proto/kafka/event";
 
 export default function ChatRoom() {
   const storedUser = localStorage.getItem("user");
@@ -15,16 +17,23 @@ export default function ChatRoom() {
   const { chatrooms, loading } = useChatrooms(user?.username, token);
   const msgStore = useMessages();
   const [room, setRoom] = useState<any>(null);
+  
+  const handleSocketMessage = useCallback((payload: KafkaEvent) => {
+  if (payload.msgType === "message") {
+    msgStore.confirm({
+      ID: payload.id,
+      UserID: payload.userId,
+      RoomID: payload.roomId,
+      Content: new TextDecoder().decode(payload.content),
+      CreatedAt: new Date(payload.createdAt).toISOString(),
+      TempID: payload.tempId,
+      status: "sent",
+      fromself: payload.userId === user.id,
+    });
+  }
+}, [msgStore, user.id])
 
-  const socket = useChatSocket(user, token, (payload) => {
-    if (payload.MsgType === "message") {
-      msgStore.confirm({
-        ...payload,
-        status: "sent",
-        fromself: payload.UserID === user.id,
-      });
-    }
-  });
+  const socket = useChatSocket(user, token, handleSocketMessage);
 
   async function selectRoom(r: any) {
     if (!user) return;
