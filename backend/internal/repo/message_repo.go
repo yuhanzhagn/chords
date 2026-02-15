@@ -8,8 +8,8 @@ import (
 // MessageRepo defines persistence for messages.
 type MessageRepo interface {
 	Create(msg *model.Message) error
-	GetByChatRoomID(chatRoomID uint) ([]model.Message, error)
-	GetByChatRoomIDWithLimit(chatRoomID uint, limit int) ([]model.Message, error)
+	GetByRoomID(roomID uint) ([]model.Message, error)
+	GetByRoomIDWithLimit(roomID uint, limit int) ([]model.Message, error)
 	Delete(id uint) (rowsAffected int64, err error)
 }
 
@@ -26,17 +26,17 @@ func (r *messageRepo) Create(msg *model.Message) error {
 	return r.db.Create(msg).Error
 }
 
-func (r *messageRepo) GetByChatRoomID(chatRoomID uint) ([]model.Message, error) {
+func (r *messageRepo) GetByRoomID(roomID uint) ([]model.Message, error) {
 	var messages []model.Message
-	if err := r.db.Where("chat_room_id = ?", chatRoomID).Order("created_at asc").Find(&messages).Error; err != nil {
+	if err := r.db.Where("room_id = ?", roomID).Order("created_at asc").Find(&messages).Error; err != nil {
 		return nil, err
 	}
 	return messages, nil
 }
 
-func (r *messageRepo) GetByChatRoomIDWithLimit(chatRoomID uint, limit int) ([]model.Message, error) {
+func (r *messageRepo) GetByRoomIDWithLimit(roomID uint, limit int) ([]model.Message, error) {
 	var messages []model.Message
-	err := r.db.Where("chat_room_id = ?", chatRoomID).Order("created_at desc").Limit(limit).Find(&messages).Error
+	err := r.db.Where("room_id = ?", roomID).Order("created_at desc").Limit(limit).Find(&messages).Error
 	return messages, err
 }
 

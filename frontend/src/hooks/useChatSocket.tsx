@@ -3,6 +3,7 @@ import { createSocket } from "../services/socket";
 import { v4 as uuidv4 } from "uuid";
 import { UserInfo } from "../types/user";
 import { SocketPayload } from "../types/socket";
+import { KafkaEvent } from "../proto/kafka/event";
 
 export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: any) => void) {
   const socketRef = useRef<WebSocket | null>(null);
@@ -12,50 +13,70 @@ export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: a
 
     const socket = createSocket();
     socketRef.current = socket;
+    const id = (BigInt(user.id) * 10_000_000_000_000n + BigInt(Date.now())).toString();
 
     socket.onopen = () => {
-      const auth: SocketPayload = {
-        MsgType: "AUTH",
-        RoomID: 0,
-        UserID: user.id,
-        Message: token,
-        TempID: uuidv4(),
-        CreatedAt: Date.now(),
+      const auth: KafkaEvent = {
+        id: id,
+        msgType: "AUTH",
+        roomId: 0,
+        userId: Number(user.id),
+        content: new Uint8Array(0),
+        tempId: id,
+        createdAt: String(Date.now()),
       };
       socket.send(JSON.stringify(auth));
     };
 
     socket.onmessage = (e) => {
       try {
-        const payload = JSON.parse(e.data);
+        const payload: KafkaEvent = JSON.parse(e.data);
         onMessage?.(payload);
       } catch {}
     };
+    console.log(user.username, token);
+    return () => {
+      if (
+        socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING
+      ) {
+        socket.close();
+      }
 
-    return () => socket.close();
-  }, [user, token, onMessage]);
+      socketRef.current = null;
+    };
+  }, [user?.id, token]);
 
-  function send(payload: SocketPayload) {
-    socketRef.current?.send(JSON.stringify(payload));
+  function send(payload: KafkaEvent) {
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(KafkaEvent.encode(payload).finish());
   }
 
   function join(roomID: number, userID: string | number) {
+    const id = (BigInt(userID) * 10_000_000_000_000n + BigInt(Date.now())).toString();
+
     send({
-      MsgType: "join",
-      RoomID: roomID,
-      UserID: userID,
-      TempID: uuidv4(),
-      CreatedAt: Date.now(),
+      id: id,
+      msgType: "join",
+      roomId: roomID,
+      userId: Number(userID),
+      tempId: id,
+      content: new Uint8Array(0),
+      createdAt: String(Date.now()),
     });
   }
 
   function leave(roomID: number, userID: string | number) {
+    const id = (BigInt(userID) * 10_000_000_000_000n + BigInt(Date.now())).toString();
     send({
-      MsgType: "leave",
-      RoomID: roomID,
-      UserID: userID,
-      TempID: uuidv4(),
-      CreatedAt: Date.now(),
+      id: id,
+      msgType: "leave",
+      roomId: roomID,
+      userId: Number(userID),
+      tempId: id,
+      content: new Uint8Array(0),
+      createdAt: String(Date.now()),
     });
   }
 

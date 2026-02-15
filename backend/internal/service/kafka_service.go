@@ -24,7 +24,7 @@ type KafkaService struct {
 
 func (s *KafkaService) HandleOutboundEvent(event kafka.KafkaEvent) {
 	// Here you can add logic like logging or basic validation
-	log.Printf("Handling outbound event: UserID=%s, RoomID=%s, MsgType=%s", event.UserID, event.RoomID, event.MsgType)
+	log.Printf("Handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserID, event.RoomID, event.MsgType)
 	switch event.MsgType {
 	case "message":
 		s.handleChatMessage(event)
@@ -41,6 +41,11 @@ func (s *KafkaService) handleChatMessage(event kafka.KafkaEvent) {
 	// Process chat message event
 	// For example, you might want to log it or transform it before publishing
 	//
+	_, err := s.MessageService.CreateMessage(event.UserID, event.RoomID, string(event.Content))
+	if err != nil {
+		log.Println("Error creating message:", err)
+	}
+
 	s.HandleOutgoingMessage(event)
 }
 

@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"backend/internal/model"
 	"backend/internal/service"
 	"net/http"
 	"strconv"
@@ -31,13 +30,8 @@ func (mc *MessageController) CreateMessage(c *gin.Context) {
 		return
 	}
 
-	msg := model.Message{
-		Content: input.Content,
-		UserID:  input.UserID,
-		RoomID:  input.ChatRoomID,
-	}
-
-	if err := mc.MessageService.CreateMessage(&msg); err != nil {
+	msg, err := mc.MessageService.CreateMessage(input.UserID, input.ChatRoomID, input.Content)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

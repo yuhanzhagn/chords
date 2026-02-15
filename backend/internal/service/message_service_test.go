@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 	//    "gorm.io/gorm"
 
-	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/internal/service"
 )
@@ -18,24 +17,16 @@ func TestMessageService(t *testing.T) {
 	msgSvc := service.NewMessageService(repos)
 
 	t.Run("CreateMessage", func(t *testing.T) {
-		msg := &model.Message{
-			Content:   "Hello world",
-			UserID:    1,
-			RoomID:    1,
-			CreatedAt: time.Now(),
-		}
-
-		err := msgSvc.CreateMessage(msg)
+		msg, err := msgSvc.CreateMessage(1, 1, "Hello world")
 		require.NoError(t, err)
 		require.NotZero(t, msg.ID)
 	})
 
 	t.Run("GetMessagesByChatRoom", func(t *testing.T) {
 		// create two messages for the chat room
-		msg1 := &model.Message{Content: "msg1", UserID: 1, RoomID: 100, CreatedAt: time.Now().Add(-time.Hour)}
-		msg2 := &model.Message{Content: "msg2", UserID: 1, RoomID: 100, CreatedAt: time.Now()}
-		_ = msgSvc.CreateMessage(msg1)
-		_ = msgSvc.CreateMessage(msg2)
+		_, _ = msgSvc.CreateMessage(1, 100, "msg1")
+		time.Sleep(2 * time.Millisecond)
+		_, _ = msgSvc.CreateMessage(1, 100, "msg2")
 
 		msgs, err := msgSvc.GetMessagesByChatRoom(100)
 		require.NoError(t, err)
@@ -47,12 +38,8 @@ func TestMessageService(t *testing.T) {
 	t.Run("GetMessagesWithLimit", func(t *testing.T) {
 		// create multiple messages
 		for i := 0; i < 5; i++ {
-			_ = msgSvc.CreateMessage(&model.Message{
-				Content:   "limitMsg",
-				UserID:    1,
-				RoomID:    200,
-				CreatedAt: time.Now().Add(time.Duration(i) * time.Minute),
-			})
+			_, _ = msgSvc.CreateMessage(1, 200, "limitMsg")
+			time.Sleep(2 * time.Millisecond)
 		}
 
 		msgs, err := msgSvc.GetMessagesWithLimit(200, 3)
@@ -63,13 +50,7 @@ func TestMessageService(t *testing.T) {
 	})
 
 	t.Run("DeleteMessage", func(t *testing.T) {
-		msg := &model.Message{
-			Content:   "to delete",
-			UserID:    1,
-			RoomID:    300,
-			CreatedAt: time.Now(),
-		}
-		_ = msgSvc.CreateMessage(msg)
+		msg, _ := msgSvc.CreateMessage(1, 300, "to delete")
 
 		err := msgSvc.DeleteMessage(msg.ID)
 		require.NoError(t, err)

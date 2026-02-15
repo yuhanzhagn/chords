@@ -15,18 +15,28 @@ func NewMessageService(repos *repo.RepoContainer) *messageService {
 }
 
 type MessageService interface {
-	CreateMessage(msg *model.Message) error
+	CreateMessage(userID, roomID uint, content string) (*model.Message, error)
 	GetMessagesByChatRoom(chatRoomID uint) ([]model.Message, error)
 	DeleteMessage(id uint) error
 	GetMessagesWithLimit(roomID uint, limit int) ([]model.Message, error)
 }
 
-func (s *messageService) CreateMessage(msg *model.Message) error {
-	return s.repos.Message.Create(msg)
+func (s *messageService) CreateMessage(userID, roomID uint, content string) (*model.Message, error) {
+	msg := &model.Message{
+		Content: content,
+		UserID:  userID,
+		RoomID:  roomID,
+	}
+
+	if err := s.repos.Message.Create(msg); err != nil {
+		return nil, err
+	}
+
+	return msg, nil
 }
 
 func (s *messageService) GetMessagesByChatRoom(chatRoomID uint) ([]model.Message, error) {
-	return s.repos.Message.GetByChatRoomID(chatRoomID)
+	return s.repos.Message.GetByRoomID(chatRoomID)
 }
 
 func (s *messageService) DeleteMessage(id uint) error {
@@ -41,5 +51,5 @@ func (s *messageService) DeleteMessage(id uint) error {
 }
 
 func (s *messageService) GetMessagesWithLimit(roomID uint, limit int) ([]model.Message, error) {
-	return s.repos.Message.GetByChatRoomIDWithLimit(roomID, limit)
+	return s.repos.Message.GetByRoomIDWithLimit(roomID, limit)
 }

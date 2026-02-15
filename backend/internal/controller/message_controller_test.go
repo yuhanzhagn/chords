@@ -32,8 +32,8 @@ func TestMessageController_CreateMessage_Success(t *testing.T) {
 	body, _ := json.Marshal(reqBody)
 
 	mockService.
-		On("CreateMessage", mock.AnythingOfType("*model.Message")).
-		Return(nil).
+		On("CreateMessage", uint(1), uint(2), "Hello world").
+		Return(&model.Message{ID: 1, Content: "Hello world", UserID: 1, RoomID: 2}, nil).
 		Once()
 
 	req := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewBuffer(body))
@@ -81,8 +81,8 @@ func TestMessageController_CreateMessage_ServiceError(t *testing.T) {
 	body, _ := json.Marshal(reqBody)
 
 	mockService.
-		On("CreateMessage", mock.AnythingOfType("*model.Message")).
-		Return(errors.New("db error")).
+		On("CreateMessage", uint(1), uint(2), "Hello world").
+		Return((*model.Message)(nil), errors.New("db error")).
 		Once()
 
 	req := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewBuffer(body))
@@ -211,9 +211,12 @@ type MockMessageService struct {
 	mock.Mock
 }
 
-func (m *MockMessageService) CreateMessage(msg *model.Message) error {
-	args := m.Called(msg)
-	return args.Error(0)
+func (m *MockMessageService) CreateMessage(userID, roomID uint, content string) (*model.Message, error) {
+	args := m.Called(userID, roomID, content)
+	if msg := args.Get(0); msg != nil {
+		return msg.(*model.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 func (m *MockMessageService) GetMessagesByChatRoom(chatRoomID uint) ([]model.Message, error) {

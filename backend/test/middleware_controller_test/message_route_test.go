@@ -53,7 +53,10 @@ func TestMeesageCreate(t *testing.T) {
 	msg := Msg{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	jsonBody, _ := json.Marshal(msg)
 
-	mockService.On("CreateMessage", mock.AnythingOfType("*model.Message")).Once().Return(errors.New("DB error"))
+	mockService.
+		On("CreateMessage", uint(1), uint(1), "Schizophrenia is taking me home").
+		Once().
+		Return((*model.Message)(nil), errors.New("DB error"))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/messages", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -67,7 +70,10 @@ func TestMeesageCreate(t *testing.T) {
 	//success
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
-	mockService.On("CreateMessage", mock.AnythingOfType("*model.Message")).Once().Return(nil)
+	mockService.
+		On("CreateMessage", uint(1), uint(1), "Schizophrenia is taking me home").
+		Once().
+		Return(&model.Message{ID: 1, Content: "Schizophrenia is taking me home", UserID: 1, RoomID: 1}, nil)
 
 	req = httptest.NewRequest(http.MethodPost, "/api/messages", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -181,9 +187,12 @@ type MockMessageService struct {
 	mock.Mock
 }
 
-func (m *MockMessageService) CreateMessage(msg *model.Message) error {
-	args := m.Called(msg)
-	return args.Error(0)
+func (m *MockMessageService) CreateMessage(userID, roomID uint, content string) (*model.Message, error) {
+	args := m.Called(userID, roomID, content)
+	if msg := args.Get(0); msg != nil {
+		return msg.(*model.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 func (m *MockMessageService) GetMessagesByChatRoom(chatRoomID uint) ([]model.Message, error) {

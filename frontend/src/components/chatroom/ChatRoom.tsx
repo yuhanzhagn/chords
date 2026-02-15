@@ -15,11 +15,12 @@ export default function ChatRoom() {
   const user = useMemo(() => (storedUser ? JSON.parse(storedUser) : null), [storedUser]);
 
   const { chatrooms, loading } = useChatrooms(user?.username, token);
-  const msgStore = useMessages();
   const [room, setRoom] = useState<any>(null);
+  const msgStore = useMessages(room?.ID, user?.id, token);
   
   const handleSocketMessage = useCallback((payload: KafkaEvent) => {
   if (payload.msgType === "message") {
+    console.log("Received message event:", payload);
     msgStore.confirm({
       ID: payload.id,
       UserID: payload.userId,
@@ -45,24 +46,25 @@ export default function ChatRoom() {
 
   function send(text: string) {
     if (!room || !user) return;
-    const temp = uuidv4();
+    const id = (BigInt(user.id) * 10_000_000_000_000n + BigInt(Date.now())).toString();
 
     socket.send({
-      MsgType: "message",
-      RoomID: room.ID,
-      UserID: user.id,
-      Content: text,
-      TempID: temp,
-      CreatedAt: Date.now(),
+      id: id,
+      msgType: "message",
+      roomId: room.ID,
+      userId: user.id,
+      content: new TextEncoder().encode(text),
+      tempId: id,
+      createdAt: String(Date.now()),
     });
 
     msgStore.add({
-      ID: -1,
+      ID: id,
       UserID: user.id,
       RoomID: room.ID,
       Content: text,
       CreatedAt: new Date().toISOString(),
-      TempID: temp,
+      TempID: id,
       status: "pending",
       fromself: true,
     });
@@ -80,7 +82,7 @@ export default function ChatRoom() {
       <ChatWindow
         chatroom={room}
         messages={msgStore.messages}
-        loading={false}
+        loading={msgStore.loading}
         onSendMessage={send}
       />
     </div>

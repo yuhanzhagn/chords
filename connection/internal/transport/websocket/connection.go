@@ -2,12 +2,13 @@ package websocket
 
 import (
 	"connection/internal/service"
-	"encoding/json"
+	kafkapb "connection/proto/kafka"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 	//"encoding/json"
 )
 
@@ -80,19 +81,21 @@ func readPump(c *Client, hub *Hub) {
 		if err != nil {
 			return
 		}
+		log.Printf("%x\n", raw)
 
-		var msg WSMessage
-		if err := json.Unmarshal(raw, &msg); err != nil {
+		var event kafkapb.KafkaEvent
+		if err := proto.Unmarshal(raw, &event); err != nil {
+			log.Println("unmarshal error:", err)
 			continue
 		}
 
-		switch msg.MsgType {
+		switch event.MsgType {
 
 		case "join":
-			hub.AddClientToRoom(c.ID, msg.RoomID)
+			hub.AddClientToRoom(c.ID, event.RoomId)
 
 		case "leave":
-			hub.RemoveClientFromRoom(c.ID, msg.RoomID)
+			hub.RemoveClientFromRoom(c.ID, event.RoomId)
 
 		case "message":
 			// 纯业务消息 → Kafka
