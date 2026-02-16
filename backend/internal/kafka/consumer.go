@@ -3,30 +3,34 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/IBM/sarama"
+	"google.golang.org/protobuf/proto"
+
+	kafkapb "backend/proto/kafka"
 )
 
 type WsOutboundConsumer struct {
 	consumer sarama.ConsumerGroup
 	groupID  string
 	topics   []string
-	handler  func(event KafkaEvent)
+	handler  func(event *kafkapb.KafkaEvent)
 }
 
 func NewWsOutboundConsumer(
 	brokers []string,
 	groupID string,
 	topics []string,
-	handler func(event KafkaEvent),
+	handler func(event *kafkapb.KafkaEvent),
 ) (*WsOutboundConsumer, error) {
 
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_8_0_0
-
+	config.Consumer.Offsets.AutoCommit.Enable = true
+	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
 	config.Consumer.Return.Errors = true
 	config.Consumer.Offsets.Initial = sarama.OffsetNewest
 
@@ -44,7 +48,7 @@ func NewWsOutboundConsumer(
 }
 
 type wsOutboundHandler struct {
-	handle func(event KafkaEvent)
+	handle func(event *kafkapb.KafkaEvent)
 }
 
 func (h *wsOutboundHandler) Setup(_ sarama.ConsumerGroupSession) error {
@@ -63,15 +67,15 @@ func (h *wsOutboundHandler) ConsumeClaim(
 ) error {
 
 	for msg := range claim.Messages() {
-
-		var event KafkaEvent
-		if err := json.Unmarshal(msg.Value, &event); err != nil {
+		log.Printf("[kafka] Partition:%d | Offset:%d | Time:%v | Value:%s",
+			msg.Partition, msg.Offset, msg.Timestamp, string(msg.Value))
+		var event kafkapb.KafkaEvent
+		if err := proto.Unmarshal(msg.Value, &event); err != nil {
 			log.Println("[kafka] unmarshal error:", err)
 			continue
 		}
-		log.Printf("[kafka] ws outbound consumed message: topic=%s, partition=%d, offset=%d, value=%s\n",
-			msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
-		h.handle(event)
+
+		h.handle(&event)
 
 		session.MarkMessage(msg, "")
 	}

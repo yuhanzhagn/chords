@@ -8,6 +8,17 @@ import { useChatSocket } from "../../hooks/useChatSocket";
 import './chat.css'
 import { KafkaEvent } from "../../proto/kafka/event";
 
+function toIsoTime(createdAt: string): string {
+  const raw = Number(createdAt);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return new Date().toISOString();
+  }
+
+  const millis = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+  const date = new Date(millis);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
 export default function ChatRoom() {
   const storedUser = localStorage.getItem("user");
   const token = localStorage.getItem("jwt") || undefined;
@@ -17,7 +28,7 @@ export default function ChatRoom() {
   const { chatrooms, loading } = useChatrooms(user?.username, token);
   const [room, setRoom] = useState<any>(null);
   const msgStore = useMessages(room?.ID, user?.id, token);
-  
+
   const handleSocketMessage = useCallback((payload: KafkaEvent) => {
   if (payload.msgType === "message") {
     console.log("Received message event:", payload);
@@ -26,13 +37,13 @@ export default function ChatRoom() {
       UserID: payload.userId,
       RoomID: payload.roomId,
       Content: new TextDecoder().decode(payload.content),
-      CreatedAt: new Date(payload.createdAt).toISOString(),
+      CreatedAt: toIsoTime(payload.createdAt),
       TempID: payload.tempId,
       status: "sent",
-      fromself: payload.userId === user.id,
+      fromself: payload.userId === user?.id,
     });
   }
-}, [msgStore, user.id])
+}, [msgStore, user?.id])
 
   const socket = useChatSocket(user, token, handleSocketMessage);
 

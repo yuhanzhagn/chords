@@ -3,11 +3,11 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 
 	"github.com/IBM/sarama"
+	"google.golang.org/protobuf/proto"
 
 	kafkapb "connection/proto/kafka"
 )
@@ -66,13 +66,13 @@ func (h *wsOutboundHandler) ConsumeClaim(
 
 	for msg := range claim.Messages() {
 
-		var event *kafkapb.KafkaEvent
-		if err := json.Unmarshal(msg.Value, &event); err != nil {
+		var event kafkapb.KafkaEvent
+		if err := proto.Unmarshal(msg.Value, &event); err != nil {
 			log.Println("[kafka] unmarshal error:", err)
 			continue
 		}
 
-		h.handle(event)
+		h.handle(&event)
 
 		session.MarkMessage(msg, "")
 	}

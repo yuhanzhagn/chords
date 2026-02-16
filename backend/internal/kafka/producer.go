@@ -1,32 +1,38 @@
 package kafka
 
 import (
-	"context"
-
-	"github.com/segmentio/kafka-go"
+	"github.com/IBM/sarama"
 )
 
 type KafkaProducer struct {
-	writer *kafka.Writer
+	producer sarama.SyncProducer
 }
 
 func NewKafkaProducer(brokers []string) *KafkaProducer {
+	config := sarama.NewConfig()
+	config.Version = sarama.V2_8_0_0
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Return.Successes = true
+
+	producer, err := sarama.NewSyncProducer(brokers, config)
+	if err != nil {
+		panic(err)
+	}
+
 	return &KafkaProducer{
-		writer: &kafka.Writer{
-			Addr:     kafka.TCP(brokers...),
-			Topic:    "ws.outbound",
-			Balancer: &kafka.LeastBytes{},
-		},
+		producer: producer,
 	}
 }
 
 func (p *KafkaProducer) Publish(topic string, key []byte, value []byte) error {
-	return p.writer.WriteMessages(context.Background(), kafka.Message{
-		Key:   key,
-		Value: value,
+	_, _, err := p.producer.SendMessage(&sarama.ProducerMessage{
+		Topic: topic,
+		Key:   sarama.ByteEncoder(key),
+		Value: sarama.ByteEncoder(value),
 	})
+	return err
 }
 
 func (p *KafkaProducer) Close() error {
-	return p.writer.Close()
+	return p.producer.Close()
 }

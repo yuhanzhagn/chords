@@ -8,7 +8,6 @@ require (
 	github.com/IBM/sarama v1.46.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/segmentio/kafka-go v0.4.50
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.47.0
 	google.golang.org/protobuf v1.36.11

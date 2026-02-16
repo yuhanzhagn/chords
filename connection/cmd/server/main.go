@@ -35,7 +35,7 @@ func WsHandler(hub *websocket.Hub, msgService *service.MessageService) http.Hand
 func StartKafkaConsumer(hub *websocket.Hub) {
 	consumer, err := kafka.NewWsOutboundConsumer(
 		[]string{"kafka:9092"},
-		"ws-gateway",
+		"connection-ws-gateway",
 		[]string{"ws.outbound"},
 		hub.HandleOutboundEvent,
 	)

@@ -105,7 +105,7 @@ func setupKafkaConsumer(kafkaService service.KafkaService) {
 	// Implement Kafka consumer setup here
 	consumer, err := kafka.NewWsOutboundConsumer(
 		[]string{"kafka:9092"},
-		"ws-gateway",
+		"backend-ws-processor",
 		[]string{"ws.inbound"},
 		kafkaService.HandleOutboundEvent,
 	)

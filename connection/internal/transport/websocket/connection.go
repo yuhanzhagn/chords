@@ -111,7 +111,7 @@ func readPump(c *Client, hub *Hub) {
 func writePump(c *Client) {
 	for msg := range c.SendChan {
 		c.Conn.Ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		err := c.Conn.Ws.WriteMessage(websocket.TextMessage, msg)
+		err := c.Conn.Ws.WriteMessage(websocket.BinaryMessage, msg)
 		if err != nil {
 			log.Println("write error:", err)
 			break

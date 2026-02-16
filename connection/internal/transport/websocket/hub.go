@@ -3,9 +3,10 @@ package websocket
 import (
 	"connection/internal/service"
 	kafkapb "connection/proto/kafka"
-	"encoding/json"
 	"log"
 	"sync"
+
+	"google.golang.org/protobuf/proto"
 )
 
 type Client struct {
@@ -59,8 +60,9 @@ func (h *Hub) Broadcast(roomID uint32, msg []byte) {
 func (h *Hub) HandleOutboundEvent(event *kafkapb.KafkaEvent) {
 	// Unmarshal the outbound message to get roomID and body
 	log.Printf("Hub handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserId, event.RoomId, event.MsgType)
-	rawbytes, err := json.Marshal(event)
+	rawbytes, err := proto.Marshal(event)
 	if err != nil {
+		log.Printf("Failed to marshal KafkaEvent: %v", err)
 		return
 	}
 	h.Broadcast(event.RoomId, rawbytes)

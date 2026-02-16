@@ -16,23 +16,17 @@ export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: a
     const id = (BigInt(user.id) * 10_000_000_000_000n + BigInt(Date.now())).toString();
 
     socket.onopen = () => {
-      const auth: KafkaEvent = {
-        id: id,
-        msgType: "AUTH",
-        roomId: 0,
-        userId: Number(user.id),
-        content: new Uint8Array(0),
-        tempId: id,
-        createdAt: String(Date.now()),
-      };
-      socket.send(JSON.stringify(auth));
+      console.log("WebSocket connection established");
     };
 
     socket.onmessage = (e) => {
       try {
-        const payload: KafkaEvent = JSON.parse(e.data);
-        onMessage?.(payload);
-      } catch {}
+        const uint8Array = new Uint8Array(e.data);
+        const decodedEvent = KafkaEvent.decode(uint8Array);
+        onMessage?.(decodedEvent);
+      } catch (err) {
+        console.error("Failed to decode KafkaEvent:", err);
+      }
     };
     console.log(user.username, token);
     return () => {

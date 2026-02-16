@@ -1,10 +1,12 @@
 package service
 
 import (
-	"backend/internal/kafka"
-	"encoding/json"
 	"log"
 	"time"
+
+	kafkapb "backend/proto/kafka"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // MessageProducer defines the contract for sending messages to a broker
@@ -22,9 +24,9 @@ type KafkaService struct {
 	MessageService MessageService
 }
 
-func (s *KafkaService) HandleOutboundEvent(event kafka.KafkaEvent) {
+func (s *KafkaService) HandleOutboundEvent(event *kafkapb.KafkaEvent) {
 	// Here you can add logic like logging or basic validation
-	log.Printf("Handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserID, event.RoomID, event.MsgType)
+	log.Printf("Handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserId, event.RoomId, event.MsgType)
 	switch event.MsgType {
 	case "message":
 		s.handleChatMessage(event)
@@ -37,11 +39,11 @@ func (s *KafkaService) HandleOutboundEvent(event kafka.KafkaEvent) {
 	}
 }
 
-func (s *KafkaService) handleChatMessage(event kafka.KafkaEvent) {
+func (s *KafkaService) handleChatMessage(event *kafkapb.KafkaEvent) {
 	// Process chat message event
 	// For example, you might want to log it or transform it before publishing
 	//
-	_, err := s.MessageService.CreateMessage(event.UserID, event.RoomID, string(event.Content))
+	_, err := s.MessageService.CreateMessage(uint(event.UserId), uint(event.RoomId), string(event.Content))
 	if err != nil {
 		log.Println("Error creating message:", err)
 	}
@@ -49,13 +51,13 @@ func (s *KafkaService) handleChatMessage(event kafka.KafkaEvent) {
 	s.HandleOutgoingMessage(event)
 }
 
-func (s *KafkaService) handleJoin(event kafka.KafkaEvent) {
+func (s *KafkaService) handleJoin(event *kafkapb.KafkaEvent) {
 	// Process room join event
 	// For example, you might want to log it or transform it before publishing
 	s.HandleOutgoingMessage(event)
 }
 
-func (s *KafkaService) handleLeave(event kafka.KafkaEvent) {
+func (s *KafkaService) handleLeave(event *kafkapb.KafkaEvent) {
 	// Process room leave event
 	// For example, you might want to log it or transform it before publishing
 
@@ -63,12 +65,12 @@ func (s *KafkaService) handleLeave(event kafka.KafkaEvent) {
 }
 
 // HandleOutgoingMessage handles messages consumed from Kafka
-func (s *KafkaService) HandleOutgoingMessage(event kafka.KafkaEvent) error {
-	event.CreateAt = time.Now().Unix()
-	rawbyte, err := json.Marshal(event)
+func (s *KafkaService) HandleOutgoingMessage(event *kafkapb.KafkaEvent) error {
+	event.CreatedAt = time.Now().Unix()
+	rawbyte, err := proto.Marshal(event)
 	if err != nil {
 		log.Println("Error marshaling event:", err)
 		return err
 	}
-	return s.Producer.Publish("ws.inbound", nil, rawbyte)
+	return s.Producer.Publish("ws.outbound", nil, rawbyte)
 }
