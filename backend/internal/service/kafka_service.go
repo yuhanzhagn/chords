@@ -72,5 +72,5 @@ func (s *KafkaService) HandleOutgoingMessage(event *kafkapb.KafkaEvent) error {
 		log.Println("Error marshaling event:", err)
 		return err
 	}
-	return s.Producer.Publish("ws.outbound", nil, rawbyte)
+	return s.Producer.Publish("notification", nil, rawbyte)
 }

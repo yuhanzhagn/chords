@@ -22,7 +22,7 @@ type MessageService struct {
 func (s *MessageService) HandleIncomingMessage(data []byte) {
 	// Here you can add logic like logging or basic validation
 	log.Printf("Handling incoming message: %s", string(data))
-	err := s.Producer.Publish("ws.inbound", nil, data)
+	err := s.Producer.Publish("user-request", nil, data)
 	if err != nil {
 		log.Printf("Failed to publish message: %v", err)
 	}

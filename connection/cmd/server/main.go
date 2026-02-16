@@ -36,7 +36,7 @@ func StartKafkaConsumer(hub *websocket.Hub) {
 	consumer, err := kafka.NewWsOutboundConsumer(
 		[]string{"kafka:9092"},
 		"connection-ws-gateway",
-		[]string{"ws.outbound"},
+		[]string{"notification"},
 		hub.HandleOutboundEvent,
 	)
 	if err != nil {
