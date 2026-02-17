@@ -1,12 +1,15 @@
 package main
 
 import (
+	"connection/internal/platform/codec"
 	"connection/internal/platform/kafka"
 	"connection/internal/service"
 	"connection/internal/transport/websocket"
+	kafkapb "connection/proto/kafka"
 	"context"
 	"log"
 	"net/http"
+	"os"
 )
 
 func WsAuthMiddleware(next http.Handler) http.Handler {
@@ -23,7 +26,7 @@ func WsAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func WsHandler(hub *websocket.Hub, msgService *service.MessageService) http.Handler {
+func WsHandler[T any](hub *websocket.Hub[T], msgService *service.MessageService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// userID := r.Context().Value("userID").(uint32)
@@ -32,12 +35,13 @@ func WsHandler(hub *websocket.Hub, msgService *service.MessageService) http.Hand
 	})
 }
 
-func StartKafkaConsumer(hub *websocket.Hub) {
+func StartKafkaConsumer[T any](hub *websocket.Hub[T]) {
 	consumer, err := kafka.NewWsOutboundConsumer(
 		[]string{"kafka:9092"},
 		"connection-ws-gateway",
 		[]string{"notification"},
 		hub.HandleOutboundEvent,
+		hub.Codec(),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -52,7 +56,12 @@ func StartKafkaConsumer(hub *websocket.Hub) {
 func main() {
 	// HTTP server setup
 	mux := http.NewServeMux()
-	hub := websocket.NewHub(websocket.NewMemoryStore())
+	eventCodec := newEventCodec()
+	eventRouter := websocket.EventRouter[*kafkapb.KafkaEvent]{
+		MsgType: func(e *kafkapb.KafkaEvent) string { return e.MsgType },
+		RoomID:  func(e *kafkapb.KafkaEvent) uint32 { return e.RoomId },
+	}
+	hub := websocket.NewHub(websocket.NewMemoryStore(), eventCodec, eventRouter)
 
 	msgService := &service.MessageService{
 		Producer: kafka.NewKafkaProducer([]string{"kafka:9092"}),
@@ -65,4 +74,19 @@ func main() {
 	StartKafkaConsumer(hub)
 
 	http.ListenAndServe(":8081", mux)
+}
+
+func newEventCodec() codec.EventCodec[*kafkapb.KafkaEvent] {
+	switch os.Getenv("EVENT_CODEC") {
+	case "json":
+		return codec.NewJSONEventCodec[*kafkapb.KafkaEvent]()
+	default:
+		pbCodec, err := codec.NewProtobufEventCodec(func() *kafkapb.KafkaEvent {
+			return &kafkapb.KafkaEvent{}
+		})
+		if err != nil {
+			log.Fatalf("failed to build protobuf codec: %v", err)
+		}
+		return pbCodec
+	}
 }

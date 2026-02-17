@@ -2,14 +2,11 @@ package websocket
 
 import (
 	"connection/internal/service"
-	kafkapb "connection/proto/kafka"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"google.golang.org/protobuf/proto"
-	//"encoding/json"
 )
 
 var upgrader = websocket.Upgrader{
@@ -39,11 +36,11 @@ type Connection struct {
 	Send chan []byte
 }
 
-func ServeWs(
+func ServeWs[T any](
 	userID uint32,
 	w http.ResponseWriter,
 	r *http.Request,
-	hub *Hub,
+	hub *Hub[T],
 	msgService *service.MessageService,
 ) {
 	ws, err := upgrader.Upgrade(w, r, nil)
@@ -60,6 +57,7 @@ func ServeWs(
 		ID:         userID,
 		Conn:       conn,
 		SendChan:   make(chan []byte, 256),
+		wsMsgType:  hub.WSMessageType(),
 		msgService: *msgService,
 	}
 
@@ -70,7 +68,7 @@ func ServeWs(
 	go readPump(client, hub)
 }
 
-func readPump(c *Client, hub *Hub) {
+func readPump[T any](c *Client, hub *Hub[T]) {
 	defer func() {
 		log.Printf("Websocket is closing.")
 		c.Conn.Ws.Close()
@@ -83,23 +81,27 @@ func readPump(c *Client, hub *Hub) {
 		}
 		log.Printf("%x\n", raw)
 
-		var event kafkapb.KafkaEvent
-		if err := proto.Unmarshal(raw, &event); err != nil {
-			log.Println("unmarshal error:", err)
+		event, err := hub.Codec().Decode(raw)
+		if err != nil {
+			log.Println("decode error:", err)
 			continue
 		}
 
-		switch event.MsgType {
+		switch {
 
-		case "join":
-			hub.AddClientToRoom(c.ID, event.RoomId)
+		case hub.IsJoin(event):
+			hub.AddClientToRoom(c.ID, hub.RoomID(event))
 
-		case "leave":
-			hub.RemoveClientFromRoom(c.ID, event.RoomId)
+		case hub.IsLeave(event):
+			hub.RemoveClientFromRoom(c.ID, hub.RoomID(event))
 
-		case "message":
-			// 纯业务消息 → Kafka
-			c.msgService.HandleIncomingMessage(raw)
+		case hub.IsMessage(event):
+			encodedEvent, err := hub.Codec().Encode(event)
+			if err != nil {
+				log.Println("encode error:", err)
+				continue
+			}
+			c.msgService.HandleIncomingMessage(encodedEvent)
 
 		default:
 			// ignore / log
@@ -111,7 +113,7 @@ func readPump(c *Client, hub *Hub) {
 func writePump(c *Client) {
 	for msg := range c.SendChan {
 		c.Conn.Ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		err := c.Conn.Ws.WriteMessage(websocket.BinaryMessage, msg)
+		err := c.Conn.Ws.WriteMessage(c.wsMsgType, msg)
 		if err != nil {
 			log.Println("write error:", err)
 			break
