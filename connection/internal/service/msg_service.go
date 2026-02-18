@@ -17,12 +17,17 @@ type OutgoingHandler interface {
 type MessageService struct {
 	Producer        MessageProducer
 	OutgoingHandler OutgoingHandler
+	InboundTopic    string
 }
 
 func (s *MessageService) HandleIncomingMessage(data []byte) {
 	// Here you can add logic like logging or basic validation
 	log.Printf("Handling incoming message: %s", string(data))
-	err := s.Producer.Publish("user-request", nil, data)
+	topic := s.InboundTopic
+	if topic == "" {
+		topic = "user-request"
+	}
+	err := s.Producer.Publish(topic, nil, data)
 	if err != nil {
 		log.Printf("Failed to publish message: %v", err)
 	}

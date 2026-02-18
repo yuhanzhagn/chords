@@ -1,0 +1,13 @@
+server:
+  address: ":8081"
+
+event:
+  codec: "protobuf"
+
+kafka:
+  brokers:
+    - "kafka:9092"
+  consumer_group: "connection-ws-gateway"
+  outbound_topics:
+    - "notification"
+  inbound_topic: "user-request"

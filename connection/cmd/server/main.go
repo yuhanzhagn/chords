@@ -1,6 +1,7 @@
 package main
 
 import (
+	"connection/internal/app"
 	"connection/internal/platform/codec"
 	"connection/internal/platform/kafka"
 	"connection/internal/service"
@@ -9,7 +10,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 )
 
 func WsAuthMiddleware(next http.Handler) http.Handler {
@@ -35,11 +35,11 @@ func WsHandler[T any](hub *websocket.Hub[T], msgService *service.MessageService)
 	})
 }
 
-func StartKafkaConsumer[T any](hub *websocket.Hub[T]) {
+func StartKafkaConsumer[T any](hub *websocket.Hub[T], cfg *app.Config) {
 	consumer, err := kafka.NewWsOutboundConsumer(
-		[]string{"kafka:9092"},
-		"connection-ws-gateway",
-		[]string{"notification"},
+		cfg.Kafka.Brokers,
+		cfg.Kafka.ConsumerGroup,
+		cfg.Kafka.OutboundTopics,
 		hub.HandleOutboundEvent,
 		hub.Codec(),
 	)
@@ -54,9 +54,14 @@ func StartKafkaConsumer[T any](hub *websocket.Hub[T]) {
 }
 
 func main() {
+	cfg, err := app.LoadConfig("configs/config.yaml")
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+
 	// HTTP server setup
 	mux := http.NewServeMux()
-	eventCodec := newEventCodec()
+	eventCodec := newEventCodec(cfg.Event.Codec)
 	eventRouter := websocket.EventRouter[*kafkapb.KafkaEvent]{
 		MsgType: func(e *kafkapb.KafkaEvent) string { return e.MsgType },
 		RoomID:  func(e *kafkapb.KafkaEvent) uint32 { return e.RoomId },
@@ -64,20 +69,23 @@ func main() {
 	hub := websocket.NewHub(websocket.NewMemoryStore(), eventCodec, eventRouter)
 
 	msgService := &service.MessageService{
-		Producer: kafka.NewKafkaProducer([]string{"kafka:9092"}),
+		Producer:     kafka.NewKafkaProducer(cfg.Kafka.Brokers),
+		InboundTopic: cfg.Kafka.InboundTopic,
 	}
 
 	wsHandler := WsAuthMiddleware(WsHandler(hub, msgService))
 	mux.Handle("/ws", wsHandler)
 
 	// Start Kafka consumer
-	StartKafkaConsumer(hub)
+	StartKafkaConsumer(hub, cfg)
 
-	http.ListenAndServe(":8081", mux)
+	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
+		log.Fatal(err)
+	}
 }
 
-func newEventCodec() codec.EventCodec[*kafkapb.KafkaEvent] {
-	switch os.Getenv("EVENT_CODEC") {
+func newEventCodec(codecType string) codec.EventCodec[*kafkapb.KafkaEvent] {
+	switch codecType {
 	case "json":
 		return codec.NewJSONEventCodec[*kafkapb.KafkaEvent]()
 	default:
