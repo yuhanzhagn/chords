@@ -69,7 +69,7 @@ func (h *Hub[T]) AddClient(client *Client) {
 }
 
 func (h *Hub[T]) AddClientToRoom(clientID uint32, roomID uint32) {
-	h.store.AddClientToRoom(clientID, roomID)
+	h.store.AssignClientToGroup(clientID, roomID)
 }
 
 func (h *Hub[T]) RemoveClient(clientID uint32) {
@@ -77,11 +77,11 @@ func (h *Hub[T]) RemoveClient(clientID uint32) {
 }
 
 func (h *Hub[T]) RemoveClientFromRoom(clientID uint32, roomID uint32) {
-	h.store.RemoveClientFromRoom(clientID, roomID)
+	h.store.RemoveClientFromGroup(clientID, roomID)
 }
 
 func (h *Hub[T]) Broadcast(roomID uint32, msg []byte) {
-	clients := h.store.GetClientsInRoom(roomID)
+	clients := h.store.GetClientsInGroup(roomID)
 	for _, c := range clients {
 		select {
 		case c.SendChan <- msg:

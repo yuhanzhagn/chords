@@ -7,11 +7,11 @@ type ConnectionStore interface {
 	AddClient(c *Client)
 	RemoveClient(clientID uint32)
 
-	AddClientToRoom(clientID uint32, roomID uint32)
-	RemoveClientFromRoom(clientID uint32, roomID uint32)
+	AssignClientToGroup(clientID uint32, groupID uint32)
+	RemoveClientFromGroup(clientID uint32, groupID uint32)
 
 	GetClient(clientID uint32) *Client
-	GetClientsInRoom(roomID uint32) []*Client
+	GetClientsInGroup(groupID uint32) []*Client
 	GetAllClients() []*Client
 }
 
@@ -50,34 +50,34 @@ func (s *MemoryStore) GetClient(clientID uint32) *Client {
 	return s.clients[clientID]
 }
 
-func (s *MemoryStore) AddClientToRoom(clientID uint32, roomID uint32) {
+func (s *MemoryStore) AssignClientToGroup(clientID uint32, groupID uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.rooms[roomID]; !ok {
-		s.rooms[roomID] = make(map[uint32]*Client)
+	if _, ok := s.rooms[groupID]; !ok {
+		s.rooms[groupID] = make(map[uint32]*Client)
 	}
 
 	if c, ok := s.clients[clientID]; ok {
-		s.rooms[roomID][clientID] = c
+		s.rooms[groupID][clientID] = c
 	}
 }
 
-func (s *MemoryStore) RemoveClientFromRoom(clientID uint32, roomID uint32) {
+func (s *MemoryStore) RemoveClientFromGroup(clientID uint32, groupID uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if room, ok := s.rooms[roomID]; ok {
+	if room, ok := s.rooms[groupID]; ok {
 		delete(room, clientID)
 	}
 }
 
-func (s *MemoryStore) GetClientsInRoom(roomID uint32) []*Client {
+func (s *MemoryStore) GetClientsInGroup(groupID uint32) []*Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var res []*Client
-	for _, c := range s.rooms[roomID] {
+	for _, c := range s.rooms[groupID] {
 		res = append(res, c)
 	}
 	return res
