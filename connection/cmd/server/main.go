@@ -2,10 +2,10 @@ package main
 
 import (
 	"connection/internal/app"
-	"connection/internal/platform/codec"
+	"connection/internal/event/codec"
+	"connection/internal/gateway"
 	"connection/internal/platform/kafka"
 	"connection/internal/service"
-	"connection/internal/transport/websocket"
 	kafkapb "connection/proto/kafka"
 	"context"
 	"log"
@@ -26,16 +26,16 @@ func WsAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func WsHandler[T any](hub *websocket.Hub[T], msgService *service.MessageService) http.Handler {
+func WsHandler[T any](hub *gateway.Hub[T], msgService *service.MessageService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// userID := r.Context().Value("userID").(uint32)
 		userID := uint32(10)
-		websocket.ServeWs(userID, w, r, hub, msgService)
+		gateway.ServeWs(userID, w, r, hub, msgService)
 	})
 }
 
-func StartKafkaConsumer[T any](hub *websocket.Hub[T], cfg *app.Config) {
+func StartKafkaConsumer[T any](hub *gateway.Hub[T], cfg *app.Config) {
 	consumer, err := kafka.NewWsOutboundConsumer(
 		cfg.Kafka.Brokers,
 		cfg.Kafka.ConsumerGroup,
@@ -62,11 +62,11 @@ func main() {
 	// HTTP server setup
 	mux := http.NewServeMux()
 	eventCodec := newEventCodec(cfg.Event.Codec)
-	eventRouter := websocket.EventRouter[*kafkapb.KafkaEvent]{
+	eventRouter := gateway.EventRouter[*kafkapb.KafkaEvent]{
 		MsgType: func(e *kafkapb.KafkaEvent) string { return e.MsgType },
 		RoomID:  func(e *kafkapb.KafkaEvent) uint32 { return e.RoomId },
 	}
-	hub := websocket.NewHub(websocket.NewMemoryStore(), eventCodec, eventRouter)
+	hub := gateway.NewHub(gateway.NewMemoryStore(), eventCodec, eventRouter)
 
 	msgService := &service.MessageService{
 		Producer:     kafka.NewKafkaProducer(cfg.Kafka.Brokers),

@@ -1,5 +1,5 @@
-// websocket/store.go
-package websocket
+// gateway/store.go
+package gateway
 
 import "sync"
 

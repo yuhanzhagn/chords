@@ -1,7 +1,7 @@
-package websocket
+package gateway
 
 import (
-	"connection/internal/platform/codec"
+	"connection/internal/event/codec"
 	"connection/internal/service"
 	"log"
 	"sync"

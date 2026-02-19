@@ -1,0 +1,38 @@
+package handler
+
+import (
+	"context"
+	"errors"
+)
+
+// HandlerFunc processes an event context.
+type HandlerFunc func(*Context) error
+
+// Middleware wraps a handler with additional behavior.
+type Middleware func(next HandlerFunc) HandlerFunc
+
+// Sink is the destination for fully processed events.
+type Sink interface {
+	WriteEvent(ctx context.Context, event any) error
+}
+
+// Validator validates an event context before it reaches downstream handlers.
+type Validator interface {
+	Validate(*Context) error
+}
+
+// SinkHandler is the final handler that writes events to a sink.
+func SinkHandler(sink Sink) HandlerFunc {
+	return func(c *Context) error {
+		if c == nil {
+			return errors.New("context is required")
+		}
+		if sink == nil {
+			return errors.New("sink is required")
+		}
+		if c.Context == nil {
+			c.Context = context.Background()
+		}
+		return sink.WriteEvent(c.Context, c.Event)
+	}
+}

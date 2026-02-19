@@ -2,7 +2,7 @@
 package kafka
 
 import (
-	"connection/internal/platform/codec"
+	"connection/internal/event/codec"
 	"context"
 	"errors"
 	"log"
