@@ -1,7 +1,8 @@
 package gateway
 
 import (
-	"connection/internal/service"
+	"connection/internal/handler"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -24,6 +25,12 @@ type WSMessage struct {
 	TempID  string `json:"TempID"`
 }
 
+// InboundEvent wraps a decoded event with transport metadata.
+type InboundEvent[T any] struct {
+	ClientID uint32
+	Event    T
+}
+
 type WSConn interface {
 	ReadMessage() (int, []byte, error)
 	WriteMessage(int, []byte) error
@@ -32,8 +39,22 @@ type WSConn interface {
 }
 
 type Connection struct {
-	Ws   WSConn
-	Send chan []byte
+	Ws             WSConn
+	Send           chan []byte
+	inboundHandler handler.HandlerFunc
+}
+
+func NewConnection(ws WSConn, inboundHandler handler.HandlerFunc) (*Connection, error) {
+	if ws == nil {
+		return nil, errors.New("ws connection is required")
+	}
+	if inboundHandler == nil {
+		return nil, errors.New("inbound handler is required")
+	}
+	return &Connection{
+		Ws:             ws,
+		inboundHandler: inboundHandler,
+	}, nil
 }
 
 func ServeWs[T any](
@@ -41,7 +62,7 @@ func ServeWs[T any](
 	w http.ResponseWriter,
 	r *http.Request,
 	hub *Hub[T],
-	msgService *service.MessageService,
+	inboundHandler handler.HandlerFunc,
 ) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -49,16 +70,18 @@ func ServeWs[T any](
 		return
 	}
 
-	conn := &Connection{
-		Ws: ws,
+	conn, err := NewConnection(ws, inboundHandler)
+	if err != nil {
+		log.Println("connection setup error:", err)
+		_ = ws.Close()
+		return
 	}
 
 	client := &Client{
-		ID:         userID,
-		Conn:       conn,
-		SendChan:   make(chan []byte, 256),
-		wsMsgType:  hub.WSMessageType(),
-		msgService: *msgService,
+		ID:        userID,
+		Conn:      conn,
+		SendChan:  make(chan []byte, 256),
+		wsMsgType: hub.WSMessageType(),
 	}
 
 	// 1. 注册 client（全局唯一真相）
@@ -87,24 +110,13 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 			continue
 		}
 
-		switch {
-
-		case hub.IsJoin(event):
-			hub.AddClientToRoom(c.ID, hub.RoomID(event))
-
-		case hub.IsLeave(event):
-			hub.RemoveClientFromRoom(c.ID, hub.RoomID(event))
-
-		case hub.IsMessage(event):
-			encodedEvent, err := hub.Codec().Encode(event)
-			if err != nil {
-				log.Println("encode error:", err)
-				continue
-			}
-			c.msgService.HandleIncomingMessage(encodedEvent)
-
-		default:
-			// ignore / log
+		err = c.Conn.inboundHandler(&handler.Context{
+			ClientID:   c.ID,
+			Event:      InboundEvent[T]{ClientID: c.ID, Event: event},
+			ReceivedAt: time.Now(),
+		})
+		if err != nil {
+			log.Println("inbound handler error:", err)
 		}
 	}
 

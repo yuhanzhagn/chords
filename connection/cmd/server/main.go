@@ -1,13 +1,16 @@
 package main
 
 import (
+	kafkaadapter "connection/internal/adapter/kafka"
 	"connection/internal/app"
 	"connection/internal/event/codec"
 	"connection/internal/gateway"
-	"connection/internal/platform/kafka"
-	"connection/internal/service"
+	"connection/internal/handler"
+	kafkaplatform "connection/internal/platform/kafka"
+	"connection/internal/sink"
 	kafkapb "connection/proto/kafka"
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -26,17 +29,16 @@ func WsAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func WsHandler[T any](hub *gateway.Hub[T], msgService *service.MessageService) http.Handler {
+func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// userID := r.Context().Value("userID").(uint32)
 		userID := uint32(10)
-		gateway.ServeWs(userID, w, r, hub, msgService)
+		gateway.ServeWs(userID, w, r, hub, inboundHandler)
 	})
 }
 
 func StartKafkaConsumer[T any](hub *gateway.Hub[T], cfg *app.Config) {
-	consumer, err := kafka.NewWsOutboundConsumer(
+	consumer, err := kafkaplatform.NewWsOutboundConsumer(
 		cfg.Kafka.Brokers,
 		cfg.Kafka.ConsumerGroup,
 		cfg.Kafka.OutboundTopics,
@@ -53,13 +55,102 @@ func StartKafkaConsumer[T any](hub *gateway.Hub[T], cfg *app.Config) {
 	consumer.Start(ctx)
 }
 
+type messageEventSink struct {
+	hub       *gateway.Hub[*kafkapb.KafkaEvent]
+	multiSink sink.Sink[*kafkapb.KafkaEvent]
+}
+
+func (s *messageEventSink) WriteEvent(ctx context.Context, event any) error {
+	inbound, ok := event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
+	if !ok {
+		return fmt.Errorf("unexpected event type: %T", event)
+	}
+	if !s.hub.IsMessage(inbound.Event) {
+		return nil
+	}
+	if err := s.multiSink.Write(ctx, inbound.Event); err != nil {
+		return fmt.Errorf("send inbound event to sinks: %w", err)
+	}
+	return nil
+}
+
+func roomAssignmentHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
+	return func(c *handler.Context) error {
+		inbound, ok := c.Event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
+		if !ok {
+			return fmt.Errorf("unexpected event type: %T", c.Event)
+		}
+
+		switch {
+		case hub.IsJoin(inbound.Event):
+			hub.AddClientToRoom(inbound.ClientID, hub.RoomID(inbound.Event))
+		case hub.IsLeave(inbound.Event):
+			hub.RemoveClientFromRoom(inbound.ClientID, hub.RoomID(inbound.Event))
+		}
+		return nil
+	}
+}
+
+func setupMultiSink(
+	cfg *app.Config,
+	eventCodec codec.EventCodec[*kafkapb.KafkaEvent],
+) (sink.Sink[*kafkapb.KafkaEvent], func() error, error) {
+	kafkaSink, err := kafkaadapter.NewEventSink[*kafkapb.KafkaEvent](
+		cfg.Kafka.Brokers,
+		cfg.Kafka.InboundTopic,
+		eventCodec,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build kafka event sink: %w", err)
+	}
+
+	retryKafkaSink := sink.NewRetrySink[*kafkapb.KafkaEvent](kafkaSink, sink.RetrySinkConfig{Attempts: 3})
+	asyncKafkaSink := sink.NewAsyncSink[*kafkapb.KafkaEvent](retryKafkaSink, sink.AsyncSinkConfig{
+		BufferSize:     1024,
+		Workers:        1,
+		BlockOnEnqueue: true,
+		OnWriteError: func(err error) {
+			log.Printf("async kafka sink write error: %v", err)
+		},
+	})
+
+	multiSink := sink.NewMultiSink[*kafkapb.KafkaEvent](sink.MultiSinkConfig{Concurrent: false}, asyncKafkaSink)
+	return multiSink, asyncKafkaSink.Close, nil
+}
+
+func setupHandlerChain(
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	multiSink sink.Sink[*kafkapb.KafkaEvent],
+) handler.HandlerFunc {
+	assignRoom := roomAssignmentHandler(hub)
+
+	roomAssignmentMiddleware := func(next handler.HandlerFunc) handler.HandlerFunc {
+		return func(c *handler.Context) error {
+			if err := assignRoom(c); err != nil {
+				return err
+			}
+
+			inbound, ok := c.Event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
+			if !ok {
+				return fmt.Errorf("unexpected event type: %T", c.Event)
+			}
+			if !hub.IsMessage(inbound.Event) {
+				return nil
+			}
+			return next(c)
+		}
+	}
+
+	finalSinkHandler := handler.SinkHandler(&messageEventSink{hub: hub, multiSink: multiSink})
+	return handler.Chain(finalSinkHandler, roomAssignmentMiddleware)
+}
+
 func main() {
 	cfg, err := app.LoadConfig("configs/config.yaml")
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	// HTTP server setup
 	mux := http.NewServeMux()
 	eventCodec := newEventCodec(cfg.Event.Codec)
 	eventRouter := gateway.EventRouter[*kafkapb.KafkaEvent]{
@@ -68,15 +159,21 @@ func main() {
 	}
 	hub := gateway.NewHub(gateway.NewMemoryStore(), eventCodec, eventRouter)
 
-	msgService := &service.MessageService{
-		Producer:     kafka.NewKafkaProducer(cfg.Kafka.Brokers),
-		InboundTopic: cfg.Kafka.InboundTopic,
+	multiSink, closeSink, err := setupMultiSink(cfg, eventCodec)
+	if err != nil {
+		log.Fatalf("failed to setup multi sink: %v", err)
 	}
+	defer func() {
+		if err := closeSink(); err != nil {
+			log.Printf("failed to close inbound sink: %v", err)
+		}
+	}()
 
-	wsHandler := WsAuthMiddleware(WsHandler(hub, msgService))
+	inboundHandler := setupHandlerChain(hub, multiSink)
+
+	wsHandler := WsAuthMiddleware(WsHandler(hub, inboundHandler))
 	mux.Handle("/ws", wsHandler)
 
-	// Start Kafka consumer
 	StartKafkaConsumer(hub, cfg)
 
 	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {

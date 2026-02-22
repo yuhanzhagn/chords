@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"connection/internal/event/codec"
-	"connection/internal/service"
 	"log"
 	"sync"
 
@@ -10,11 +9,10 @@ import (
 )
 
 type Client struct {
-	ID         uint32
-	Conn       *Connection
-	SendChan   chan []byte
-	wsMsgType  int
-	msgService service.MessageService
+	ID        uint32
+	Conn      *Connection
+	SendChan  chan []byte
+	wsMsgType int
 }
 
 type Room struct {
