@@ -1,6 +1,7 @@
 package source
 
 import (
+	"connection/internal/handler"
 	"context"
 	"errors"
 	"sync"
@@ -13,16 +14,10 @@ type Source[T any] interface {
 	Stop(ctx context.Context) error
 }
 
-// Handler is the inbound processing dependency for a Source.
-// Source implementations should only push messages through this interface.
-type Handler[T any] interface {
-	Handle(ctx context.Context, message T) error
-}
-
 // BaseSource provides shared lifecycle and dependency scaffolding for concrete sources.
 // It centralizes cancellation and goroutine coordination while remaining transport-agnostic.
 type BaseSource[T any] struct {
-	handler Handler[T]
+	handler handler.HandlerFunc
 
 	mu      sync.Mutex
 	cancel  context.CancelFunc
@@ -31,18 +26,18 @@ type BaseSource[T any] struct {
 }
 
 // NewBaseSource constructs common source scaffolding with constructor-injected handler.
-func NewBaseSource[T any](handler Handler[T]) (*BaseSource[T], error) {
-	if handler == nil {
+func NewBaseSource[T any](h handler.HandlerFunc) (*BaseSource[T], error) {
+	if h == nil {
 		return nil, errors.New("handler is required")
 	}
 
 	return &BaseSource[T]{
-		handler: handler,
+		handler: h,
 	}, nil
 }
 
 // Handler returns the injected message handler.
-func (b *BaseSource[T]) Handler() Handler[T] {
+func (b *BaseSource[T]) Handler() handler.HandlerFunc {
 	return b.handler
 }
 

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"connection/internal/handler"
 	"context"
 	"time"
 )
@@ -26,8 +27,8 @@ type KafkaSource[T any] struct {
 }
 
 // NewKafkaSource creates a handler-injected source that can be wired from main.go.
-func NewKafkaSource[T any](handler Handler[T], opts KafkaSourceOptions[T]) (*KafkaSource[T], error) {
-	base, err := NewBaseSource[T](handler)
+func NewKafkaSource[T any](h handler.HandlerFunc, opts KafkaSourceOptions[T]) (*KafkaSource[T], error) {
+	base, err := NewBaseSource[T](h)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,12 @@ func (s *KafkaSource[T]) consumeLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			message := s.messageFactory()
-			if err := s.base.Handler().Handle(ctx, message); err != nil && s.onHandleError != nil {
+			eventCtx := &handler.Context{
+				Context:    ctx,
+				Event:      message,
+				ReceivedAt: time.Now(),
+			}
+			if err := s.base.Handler()(eventCtx); err != nil && s.onHandleError != nil {
 				s.onHandleError(err)
 			}
 		}

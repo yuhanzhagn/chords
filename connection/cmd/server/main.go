@@ -55,23 +55,23 @@ func StartKafkaConsumer[T any](hub *gateway.Hub[T], cfg *app.Config) {
 	consumer.Start(ctx)
 }
 
-type messageEventSink struct {
-	hub       *gateway.Hub[*kafkapb.KafkaEvent]
-	multiSink sink.Sink[*kafkapb.KafkaEvent]
-}
-
-func (s *messageEventSink) WriteEvent(ctx context.Context, event any) error {
-	inbound, ok := event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
-	if !ok {
-		return fmt.Errorf("unexpected event type: %T", event)
-	}
-	if !s.hub.IsMessage(inbound.Event) {
+func messageEventSinkWriter(
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	multiSink sink.Sink[*kafkapb.KafkaEvent],
+) handler.SinkFunc {
+	return func(ctx context.Context, event any) error {
+		inbound, ok := event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
+		if !ok {
+			return fmt.Errorf("unexpected event type: %T", event)
+		}
+		if !hub.IsMessage(inbound.Event) {
+			return nil
+		}
+		if err := multiSink.Write(ctx, inbound.Event); err != nil {
+			return fmt.Errorf("send inbound event to sinks: %w", err)
+		}
 		return nil
 	}
-	if err := s.multiSink.Write(ctx, inbound.Event); err != nil {
-		return fmt.Errorf("send inbound event to sinks: %w", err)
-	}
-	return nil
 }
 
 func roomAssignmentHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
@@ -140,8 +140,8 @@ func setupHandlerChain(
 			return next(c)
 		}
 	}
-
-	finalSinkHandler := handler.SinkHandler(&messageEventSink{hub: hub, multiSink: multiSink})
+	// TODO: add logging middleware, etc.
+	finalSinkHandler := handler.SinkHandler(messageEventSinkWriter(hub, multiSink))
 	return handler.Chain(finalSinkHandler, roomAssignmentMiddleware)
 }
 
