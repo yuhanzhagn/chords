@@ -142,7 +142,7 @@ func setupHandlerChain(
 	}
 	// TODO: add logging middleware, etc.
 	finalSinkHandler := handler.SinkHandler(messageEventSinkWriter(hub, multiSink))
-	return handler.Chain(finalSinkHandler, roomAssignmentMiddleware)
+	return handler.NewHandlerChain(finalSinkHandler, roomAssignmentMiddleware).Build()
 }
 
 func main() {
