@@ -6,13 +6,14 @@ import (
 	"connection/internal/event/codec"
 	"connection/internal/gateway"
 	"connection/internal/handler"
-	kafkaplatform "connection/internal/platform/kafka"
 	"connection/internal/sink"
+	"connection/internal/source"
 	kafkapb "connection/proto/kafka"
 	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 func WsAuthMiddleware(next http.Handler) http.Handler {
@@ -35,24 +36,6 @@ func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) h
 		userID := uint32(10)
 		gateway.ServeWs(userID, w, r, hub, inboundHandler)
 	})
-}
-
-func StartKafkaConsumer[T any](hub *gateway.Hub[T], cfg *app.Config) {
-	consumer, err := kafkaplatform.NewWsOutboundConsumer(
-		cfg.Kafka.Brokers,
-		cfg.Kafka.ConsumerGroup,
-		cfg.Kafka.OutboundTopics,
-		hub.HandleOutboundEvent,
-		hub.Codec(),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ctx, _ := context.WithCancel(context.Background())
-	// defer cancel()
-
-	consumer.Start(ctx)
 }
 
 func messageEventSinkWriter(
@@ -145,6 +128,22 @@ func setupHandlerChain(
 	return handler.NewHandlerChain(finalSinkHandler, roomAssignmentMiddleware).Build()
 }
 
+func outboundHubEventWriter(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.SinkFunc {
+	return func(_ context.Context, event any) error {
+		msg, ok := event.(*kafkapb.KafkaEvent)
+		if !ok {
+			return fmt.Errorf("unexpected outbound event type: %T", event)
+		}
+		hub.HandleOutboundEvent(msg)
+		return nil
+	}
+}
+
+func setupOutboundHandlerChain(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
+	finalHubHandler := handler.SinkHandler(outboundHubEventWriter(hub))
+	return handler.NewHandlerChain(finalHubHandler).Build()
+}
+
 func main() {
 	cfg, err := app.LoadConfig("configs/config.yaml")
 	if err != nil {
@@ -174,7 +173,34 @@ func main() {
 	wsHandler := WsAuthMiddleware(WsHandler(hub, inboundHandler))
 	mux.Handle("/ws", wsHandler)
 
-	StartKafkaConsumer(hub, cfg)
+	outboundHandler := setupOutboundHandlerChain(hub)
+	outboundSource, err := source.NewKafkaSource[*kafkapb.KafkaEvent](outboundHandler, source.KafkaSourceOptions[*kafkapb.KafkaEvent]{
+		Brokers: cfg.Kafka.Brokers,
+		GroupID: cfg.Kafka.ConsumerGroup,
+		Topics:  cfg.Kafka.OutboundTopics,
+		Decoder: eventCodec,
+		OnHandleError: func(err error) {
+			log.Printf("kafka outbound source error: %v", err)
+		},
+	})
+	if err != nil {
+		log.Fatalf("failed to setup kafka outbound source: %v", err)
+	}
+
+	sourceCtx, cancelSource := context.WithCancel(context.Background())
+	defer cancelSource()
+
+	if err := outboundSource.Start(sourceCtx); err != nil {
+		log.Fatalf("failed to start kafka outbound source: %v", err)
+	}
+
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := outboundSource.Stop(stopCtx); err != nil {
+			log.Printf("failed to stop outbound source: %v", err)
+		}
+	}()
 
 	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
 		log.Fatal(err)
