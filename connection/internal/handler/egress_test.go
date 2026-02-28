@@ -9,8 +9,8 @@ import (
 )
 
 type stubEvent struct {
-	Room uint32
-	Body string
+	Group uint32
+	Body  string
 }
 
 type stubCodec struct {
@@ -32,22 +32,22 @@ func (c *stubCodec) Encode(_ stubEvent) ([]byte, error) {
 type stubHub struct {
 	codec codec.EventCodec[stubEvent]
 
-	lastRoom uint32
-	lastMsg  []byte
-	calls    int
+	lastGroup uint32
+	lastMsg   []byte
+	calls     int
 }
 
 func (h *stubHub) Codec() codec.EventCodec[stubEvent] {
 	return h.codec
 }
 
-func (h *stubHub) RoomID(event stubEvent) uint32 {
-	return event.Room
+func (h *stubHub) GroupID(event stubEvent) uint32 {
+	return event.Group
 }
 
-func (h *stubHub) Broadcast(roomID uint32, msg []byte) {
+func (h *stubHub) Broadcast(groupID uint32, msg []byte) {
 	h.calls++
-	h.lastRoom = roomID
+	h.lastGroup = groupID
 	h.lastMsg = append([]byte(nil), msg...)
 }
 
@@ -71,7 +71,7 @@ func TestFanoutHandler_Handle_BroadcastToWritePumpChannel(t *testing.T) {
 		t.Fatalf("unexpected constructor error: %v", err)
 	}
 
-	event := stubEvent{Room: 42, Body: "hello"}
+	event := stubEvent{Group: 42, Body: "hello"}
 	if err := fanout.Handle(context.Background(), event); err != nil {
 		t.Fatalf("unexpected handle error: %v", err)
 	}
@@ -79,8 +79,8 @@ func TestFanoutHandler_Handle_BroadcastToWritePumpChannel(t *testing.T) {
 	if hub.calls != 1 {
 		t.Fatalf("expected single broadcast call, got %d", hub.calls)
 	}
-	if hub.lastRoom != 42 {
-		t.Fatalf("expected room 42, got %d", hub.lastRoom)
+	if hub.lastGroup != 42 {
+		t.Fatalf("expected group 42, got %d", hub.lastGroup)
 	}
 	if string(hub.lastMsg) != "payload" {
 		t.Fatalf("expected encoded payload to be broadcast, got %q", string(hub.lastMsg))
@@ -97,7 +97,7 @@ func TestFanoutHandler_Handle_EncodeError(t *testing.T) {
 		t.Fatalf("unexpected constructor error: %v", err)
 	}
 
-	err = fanout.Handle(context.Background(), stubEvent{Room: 1})
+	err = fanout.Handle(context.Background(), stubEvent{Group: 1})
 	if !errors.Is(err, expectedErr) {
 		t.Fatalf("expected wrapped encode error, got %v", err)
 	}
@@ -119,12 +119,12 @@ func TestEgressHandler_Handle_DelegatesFanout(t *testing.T) {
 		t.Fatalf("expected fanout handler to be initialized")
 	}
 
-	if err := egress.Handle(context.Background(), stubEvent{Room: 7}); err != nil {
+	if err := egress.Handle(context.Background(), stubEvent{Group: 7}); err != nil {
 		t.Fatalf("unexpected egress handle error: %v", err)
 	}
 
-	if hub.calls != 1 || hub.lastRoom != 7 {
-		t.Fatalf("expected fanout to broadcast into hub, calls=%d room=%d", hub.calls, hub.lastRoom)
+	if hub.calls != 1 || hub.lastGroup != 7 {
+		t.Fatalf("expected fanout to broadcast into hub, calls=%d group=%d", hub.calls, hub.lastGroup)
 	}
 }
 
@@ -140,7 +140,7 @@ func TestFanoutHandler_Handle_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err = fanout.Handle(ctx, stubEvent{Room: 99})
+	err = fanout.Handle(ctx, stubEvent{Group: 99})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context canceled, got %v", err)
 	}

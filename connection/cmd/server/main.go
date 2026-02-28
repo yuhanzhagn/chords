@@ -57,7 +57,7 @@ func messageEventSinkWriter(
 	}
 }
 
-func roomAssignmentHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
+func groupAssignmentHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
 	return func(c *handler.Context) error {
 		inbound, ok := c.Event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
 		if !ok {
@@ -66,9 +66,9 @@ func roomAssignmentHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.Handle
 
 		switch {
 		case hub.IsJoin(inbound.Event):
-			hub.AddClientToRoom(inbound.ClientID, hub.RoomID(inbound.Event))
+			hub.AddClientToGroup(inbound.ClientID, hub.GroupID(inbound.Event))
 		case hub.IsLeave(inbound.Event):
-			hub.RemoveClientFromRoom(inbound.ClientID, hub.RoomID(inbound.Event))
+			hub.RemoveClientFromGroup(inbound.ClientID, hub.GroupID(inbound.Event))
 		}
 		return nil
 	}
@@ -105,11 +105,11 @@ func setupHandlerChain(
 	hub *gateway.Hub[*kafkapb.KafkaEvent],
 	multiSink sink.Sink[*kafkapb.KafkaEvent],
 ) handler.HandlerFunc {
-	assignRoom := roomAssignmentHandler(hub)
+	assignGroup := groupAssignmentHandler(hub)
 
-	roomAssignmentMiddleware := func(next handler.HandlerFunc) handler.HandlerFunc {
+	groupAssignmentMiddleware := func(next handler.HandlerFunc) handler.HandlerFunc {
 		return func(c *handler.Context) error {
-			if err := assignRoom(c); err != nil {
+			if err := assignGroup(c); err != nil {
 				return err
 			}
 
@@ -125,7 +125,7 @@ func setupHandlerChain(
 	}
 	// TODO: add logging middleware, etc.
 	finalSinkHandler := handler.SinkHandler(messageEventSinkWriter(hub, multiSink))
-	return handler.NewHandlerChain(finalSinkHandler, roomAssignmentMiddleware).Build()
+	return handler.NewHandlerChain(finalSinkHandler, groupAssignmentMiddleware).Build()
 }
 
 func outboundHubEventWriter(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.SinkFunc {
@@ -154,7 +154,7 @@ func main() {
 	eventCodec := newEventCodec(cfg.Event.Codec)
 	eventRouter := gateway.EventRouter[*kafkapb.KafkaEvent]{
 		MsgType: func(e *kafkapb.KafkaEvent) string { return e.MsgType },
-		RoomID:  func(e *kafkapb.KafkaEvent) uint32 { return e.RoomId },
+		GroupID: func(e *kafkapb.KafkaEvent) uint32 { return e.RoomId },
 	}
 	hub := gateway.NewHub(gateway.NewMemoryStore(), eventCodec, eventRouter)
 

@@ -11,11 +11,11 @@ import (
 // Broadcast enqueues payloads to client send channels, which are drained by writePump.
 type FanoutHub[T any] interface {
 	Codec() codec.EventCodec[T]
-	RoomID(event T) uint32
-	Broadcast(roomID uint32, msg []byte)
+	GroupID(event T) uint32
+	Broadcast(groupID uint32, msg []byte)
 }
 
-// FanoutHandler encodes outbound events and fans them out to room subscribers.
+// FanoutHandler encodes outbound events and fans them out to group subscribers.
 type FanoutHandler[T any] struct {
 	hub FanoutHub[T]
 }
@@ -46,7 +46,7 @@ func (h *FanoutHandler[T]) Handle(ctx context.Context, event T) error {
 		return fmt.Errorf("encode outbound event: %w", err)
 	}
 
-	h.hub.Broadcast(h.hub.RoomID(event), payload)
+	h.hub.Broadcast(h.hub.GroupID(event), payload)
 	return nil
 }
 
