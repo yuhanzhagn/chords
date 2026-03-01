@@ -2,30 +2,43 @@ package redisdb
 
 import (
 	"context"
+	"fmt"
 	"github.com/redis/go-redis/v9"
 	"log"
 )
 
-/*
-var (
-    Client *redis.Client
-    ctx    = context.Background()
-)*/
+type Config struct {
+	Addr     string
+	Password string
+	DB       int
+}
 
-func InitRedis(ctx context.Context) (*redis.Client, error) {
-	Client := redis.NewClient(&redis.Options{
+func DefaultConfig() Config {
+	return Config{
 		Addr:     "redis:6379",
-		Password: "", // redis password, leave empty if none
-		DB:       0,  // default DB
+		Password: "",
+		DB:       0,
+	}
+}
+
+// NewClient creates and validates a Redis client against the provided server.
+func NewClient(ctx context.Context, cfg Config) (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
+		Addr:     cfg.Addr,
+		Password: cfg.Password,
+		DB:       cfg.DB,
 	})
 
-	// Test connection
-	if err := Client.Ping(ctx).Err(); err != nil {
-		return nil, err
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("redis ping failed: %w", err)
 	}
 
-	log.Println("Redis connected successfully")
-	return Client, nil
+	log.Printf("Redis connected successfully: %s db=%d", cfg.Addr, cfg.DB)
+	return client, nil
+}
+
+func InitRedis(ctx context.Context) (*redis.Client, error) {
+	return NewClient(ctx, DefaultConfig())
 }
 
 func ClearRedis(rdb *redis.Client) {
