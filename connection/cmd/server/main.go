@@ -6,6 +6,7 @@ import (
 	"connection/internal/event/codec"
 	"connection/internal/gateway"
 	"connection/internal/handler"
+	"connection/internal/handler/middlewares"
 	"connection/internal/sink"
 	"connection/internal/source"
 	kafkapb "connection/proto/kafka"
@@ -13,26 +14,19 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
-func WsAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := 10, true // mock authentication
-		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// put userID in context
-		ctx := context.WithValue(r.Context(), "userID", userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+type ConnectionJWTClaims struct {
+	UserID string `json:"user_id"`
+	jwt.RegisteredClaims
 }
 
 func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// userID := r.Context().Value("userID").(uint32)
 		userID := uint32(10)
 		gateway.ServeWs(userID, w, r, hub, inboundHandler)
 	})
@@ -104,6 +98,7 @@ func setupMultiSink(
 func setupHandlerChain(
 	hub *gateway.Hub[*kafkapb.KafkaEvent],
 	multiSink sink.Sink[*kafkapb.KafkaEvent],
+	jwtMiddleware handler.Middleware,
 ) handler.HandlerFunc {
 	assignGroup := groupAssignmentHandler(hub)
 
@@ -124,6 +119,7 @@ func setupHandlerChain(
 		}
 	}
 	// TODO: add logging middleware, etc.
+	// TODO: add jwt auth middleware after deciced jwt claims structure and how to pass jwt from client (e.g., via query param or subprotocol)
 	finalSinkHandler := handler.SinkHandler(messageEventSinkWriter(hub, multiSink))
 	return handler.NewHandlerChain(finalSinkHandler, groupAssignmentMiddleware).Build()
 }
@@ -168,9 +164,26 @@ func main() {
 		}
 	}()
 
-	inboundHandler := setupHandlerChain(hub, multiSink)
+	jwtSecret := os.Getenv("CONNECTION_JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "CHANGE_ME"
+	}
 
-	wsHandler := WsAuthMiddleware(WsHandler(hub, inboundHandler))
+	//jwt auth middleware
+	jwtMiddleware := middlewares.JWTAuthMiddleware[*ConnectionJWTClaims](middlewares.JWTAuthOptions[*ConnectionJWTClaims]{
+		NewClaims: func() *ConnectionJWTClaims {
+			return &ConnectionJWTClaims{}
+		},
+		Keyfunc: middlewares.KeyfuncByAlgorithm(map[string]any{
+			jwt.SigningMethodHS256.Alg(): []byte(jwtSecret),
+			jwt.SigningMethodHS384.Alg(): []byte(jwtSecret),
+			jwt.SigningMethodHS512.Alg(): []byte(jwtSecret),
+		}),
+	})
+
+	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
+
+	wsHandler := WsHandler(hub, inboundHandler)
 	mux.Handle("/ws", wsHandler)
 
 	outboundHandler := setupOutboundHandlerChain(hub)

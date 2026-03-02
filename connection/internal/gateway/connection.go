@@ -42,18 +42,23 @@ type Connection struct {
 	Ws             WSConn
 	Send           chan []byte
 	inboundHandler handler.HandlerFunc
+	Request        *http.Request
 }
 
-func NewConnection(ws WSConn, inboundHandler handler.HandlerFunc) (*Connection, error) {
+func NewConnection(ws WSConn, inboundHandler handler.HandlerFunc, request *http.Request) (*Connection, error) {
 	if ws == nil {
 		return nil, errors.New("ws connection is required")
 	}
 	if inboundHandler == nil {
 		return nil, errors.New("inbound handler is required")
 	}
+	if request == nil {
+		return nil, errors.New("http request is required")
+	}
 	return &Connection{
 		Ws:             ws,
 		inboundHandler: inboundHandler,
+		Request:        request,
 	}, nil
 }
 
@@ -70,7 +75,7 @@ func ServeWs[T any](
 		return
 	}
 
-	conn, err := NewConnection(ws, inboundHandler)
+	conn, err := NewConnection(ws, inboundHandler, r)
 	if err != nil {
 		log.Println("connection setup error:", err)
 		_ = ws.Close()
@@ -111,9 +116,13 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 		}
 
 		err = c.Conn.inboundHandler(&handler.Context{
+			Context:    c.Conn.Request.Context(),
 			ClientID:   c.ID,
 			Event:      InboundEvent[T]{ClientID: c.ID, Event: event},
 			ReceivedAt: time.Now(),
+			Values: map[string]any{
+				handler.RequestContextKey: c.Conn.Request,
+			},
 		})
 		if err != nil {
 			log.Println("inbound handler error:", err)
