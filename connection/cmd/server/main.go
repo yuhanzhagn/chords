@@ -101,6 +101,11 @@ func setupHandlerChain(
 	jwtMiddleware handler.Middleware,
 ) handler.HandlerFunc {
 	assignGroup := groupAssignmentHandler(hub)
+	rateLimitMiddleware := middlewares.ConnectionRateLimitMiddleware(middlewares.ConnectionRateLimitOptions{
+		RatePerSecond: 20,
+		Burst:         40,
+		IdleTTL:       5 * time.Minute,
+	})
 
 	groupAssignmentMiddleware := func(next handler.HandlerFunc) handler.HandlerFunc {
 		return func(c *handler.Context) error {
@@ -121,7 +126,7 @@ func setupHandlerChain(
 	// TODO: add logging middleware, etc.
 	// TODO: add jwt auth middleware after deciced jwt claims structure and how to pass jwt from client (e.g., via query param or subprotocol)
 	finalSinkHandler := handler.SinkHandler(messageEventSinkWriter(hub, multiSink))
-	return handler.NewHandlerChain(finalSinkHandler, groupAssignmentMiddleware).Build()
+	return handler.NewHandlerChain(finalSinkHandler, rateLimitMiddleware, groupAssignmentMiddleware).Build()
 }
 
 func outboundHubEventWriter(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.SinkFunc {
