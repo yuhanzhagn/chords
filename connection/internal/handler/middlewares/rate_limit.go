@@ -3,11 +3,12 @@ package middlewares
 import (
 	"connection/internal/handler"
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 type connectionBucket struct {
@@ -52,7 +53,8 @@ func ConnectionRateLimitMiddleware(opts ConnectionRateLimitOptions) handler.Midd
 
 	var mu sync.Mutex
 	buckets := make(map[string]*connectionBucket)
-	calls := 0
+	var evictionTimer *time.Timer
+	var evictionTimerC <-chan time.Time
 
 	return func(next handler.HandlerFunc) handler.HandlerFunc {
 		return func(c *handler.Context) error {
@@ -69,9 +71,18 @@ func ConnectionRateLimitMiddleware(opts ConnectionRateLimitOptions) handler.Midd
 			key := connectionKey(req)
 
 			mu.Lock()
-			calls++
-			if calls%128 == 0 {
-				evictIdleBuckets(buckets, now, idleTTL)
+			if evictionTimerC != nil {
+				select {
+				case <-evictionTimerC:
+					// Timer-driven eviction keeps request path fast under high connection counts.
+					evictIdleBuckets(buckets, now, idleTTL)
+					if len(buckets) == 0 {
+						stopEvictionTimer(&evictionTimer, &evictionTimerC)
+					} else {
+						resetEvictionTimer(&evictionTimer, &evictionTimerC, nextEvictionDelay(buckets, now, idleTTL))
+					}
+				default:
+				}
 			}
 
 			bucket, ok := buckets[key]
@@ -82,6 +93,9 @@ func ConnectionRateLimitMiddleware(opts ConnectionRateLimitOptions) handler.Midd
 					lastSeen:   now,
 				}
 				buckets[key] = bucket
+				if evictionTimer == nil {
+					resetEvictionTimer(&evictionTimer, &evictionTimerC, idleTTL)
+				}
 			}
 
 			refillBucket(bucket, now, rate, burst)
@@ -124,6 +138,87 @@ func evictIdleBuckets(buckets map[string]*connectionBucket, now time.Time, idleT
 	}
 }
 
+func nextEvictionDelay(buckets map[string]*connectionBucket, now time.Time, idleTTL time.Duration) time.Duration {
+	if len(buckets) == 0 {
+		return idleTTL
+	}
+
+	soonest := idleTTL
+	for _, bucket := range buckets {
+		if bucket == nil {
+			return 0
+		}
+
+		wait := bucket.lastSeen.Add(idleTTL).Sub(now)
+		if wait <= 0 {
+			return 0
+		}
+		if wait < soonest {
+			soonest = wait
+		}
+	}
+	return soonest
+}
+
+func stopEvictionTimer(timer **time.Timer, timerC *<-chan time.Time) {
+	if *timer == nil {
+		*timerC = nil
+		return
+	}
+
+	if !(*timer).Stop() {
+		select {
+		case <-(*timer).C:
+		default:
+		}
+	}
+	*timer = nil
+	*timerC = nil
+}
+
+func resetEvictionTimer(timer **time.Timer, timerC *<-chan time.Time, wait time.Duration) {
+	if wait < 0 {
+		wait = 0
+	}
+
+	if *timer == nil {
+		t := time.NewTimer(wait)
+		*timer = t
+		*timerC = t.C
+		return
+	}
+
+	if !(*timer).Stop() {
+		select {
+		case <-(*timer).C:
+		default:
+		}
+	}
+	(*timer).Reset(wait)
+	*timerC = (*timer).C
+}
+
 func connectionKey(req *http.Request) string {
-	return fmt.Sprintf("%p", req)
+	if req == nil {
+		return ""
+	}
+
+	// RFC 6455: client-generated key per websocket handshake; stable for a connection.
+	if wsKey := req.Header.Get("Sec-WebSocket-Key"); wsKey != "" {
+		return wsKey
+	}
+
+	if req.RemoteAddr != "" {
+		return req.RemoteAddr
+	}
+
+	if req.Host != "" {
+		return req.Host
+	}
+
+	if req.RequestURI != "" {
+		return req.RequestURI
+	}
+
+	return strconv.FormatUint(uint64(uintptr(unsafe.Pointer(req))), 36)
 }
