@@ -1,18 +1,25 @@
 # Chords
 
-A real-time chat application with a Go backend and React frontend. Users can register, log in, create and join chatrooms, and exchange messages over WebSockets.
+Chords is a real-time chat system built as a multi-service Go application with a React frontend.  
+It supports user auth, chatroom membership, message persistence, and live event delivery.
 
 ## Project Focus
 
-The current focus of this project is to improve WebSocket gateway functions (event routing, middleware pipeline, and message flow reliability).
-The WebSocket gateway module is planned to be extracted into a separate component later.
+The core of this project is the **`connection` WebSocket gateway**.
+It is responsible for:
+- maintaining client WebSocket sessions,
+- running an inbound middleware pipeline (auth, rate limit, validation, routing),
+- forwarding inbound chat events to Kafka,
+- consuming outbound events from Kafka and fan-out broadcasting to connected clients.
+
+The `backend` service provides REST APIs, authentication/token issuance, and data/business logic, while `connection` handles live transport and event flow at runtime.
 
 ## Tech Stack
 
 | Layer      | Technologies |
 |-----------|--------------|
-| **API Service (`backend`)** | Go 1.24, [Gin](https://github.com/gin-gonic/gin), [GORM](https://gorm.io), JWT auth, [Redis](https://redis.io), [Logrus](https://github.com/sirupsen/logrus), Kafka client ([Sarama](https://github.com/IBM/sarama)) |
-| **WS Gateway (`connection`)** | Go 1.24, [gorilla/websocket](https://github.com/gorilla/websocket), Kafka client ([Sarama](https://github.com/IBM/sarama)), protobuf/json event codecs |
+| **WS Gateway (`connection`)** | Go 1.24, [gorilla/websocket](https://github.com/gorilla/websocket), middleware pipeline, Kafka producer/consumer ([Sarama](https://github.com/IBM/sarama)), protobuf/json codecs |
+| **API Service (`backend`)** | Go 1.24, [Gin](https://github.com/gin-gonic/gin), [GORM](https://gorm.io), JWT issuance/validation, [Redis](https://redis.io), [Logrus](https://github.com/sirupsen/logrus), Kafka client ([Sarama](https://github.com/IBM/sarama)) |
 | **Frontend** | React 19, React Router, Create React App |
 | **Data** | SQLite (GORM), Redis (cache/sessions), Kafka (event bus) |
 | **Deploy** | Docker, Docker Compose, Traefik (reverse proxy) |
@@ -90,6 +97,11 @@ go run cmd/server/main.go
 The gateway runs at **http://localhost:8081** by default and serves WebSocket upgrades at **`/ws`**.
 Kafka settings are in `connection/configs/config.yaml`.
 
+JWT behavior in dev:
+- `backend` generates JWTs (login),
+- `connection` validates JWTs on WebSocket requests,
+- both use the same hardcoded key: `dev-shared-jwt-secret`.
+
 ### 3. Frontend (local)
 
 ```bash
@@ -154,6 +166,7 @@ Backend connects to Redis in `backend/internal/redisdb/redis.go` (`Addr`, `Passw
 ## API Overview
 
 All API routes are under `/api`. Auth uses JWT; send `Authorization: Bearer <token>` for protected routes.
+In the current dev setup, the JWT is issued by `backend` and validated by both `backend` and `connection` with the same hardcoded key (`dev-shared-jwt-secret`).
 
 | Area | Endpoints |
 |------|-----------|
@@ -163,6 +176,46 @@ All API routes are under `/api`. Auth uses JWT; send `Authorization: Bearer <tok
 | **Memberships** | `POST /api/memberships/add-user`, `GET /api/memberships/:username/chatrooms` (auth) |
 | **Messages** | `POST /api/messages`, `GET /api/chatrooms/:id/messages`, `DELETE /api/messages/:id` (auth) |
 | **WebSocket Gateway** | `GET /ws` (upgrade to WebSocket via the connection service) |
+
+## Connection Gateway Architecture
+
+The `connection` service is the real-time execution layer of the system.
+
+Inbound path (`client -> connection -> Kafka`):
+1. Client sends a WebSocket event.
+2. `connection` runs middleware chain (JWT auth, rate limiting, event filtering/routing).
+3. Message events are encoded and published to Kafka inbound topic.
+
+Outbound path (`Kafka -> connection -> client`):
+1. `connection` consumes outbound Kafka topics.
+2. Events are decoded and routed by room/group key.
+3. Matching connected clients receive broadcast messages over existing WebSocket sessions.
+
+This split lets `backend` remain focused on HTTP business APIs while `connection` scales independently for high-concurrency real-time traffic.
+
+## Future Development Aims
+
+The next stage focuses on production readiness of the `connection` gateway and platform operations:
+
+1. Move deployment from Docker Compose to Kubernetes
+- replace local Compose-first topology with k8s manifests/Helm-style deployment,
+- separate stateless gateway replicas from stateful dependencies (Kafka/Redis/DB),
+- standardize config/secrets/health probes for cluster-native operations.
+
+2. Add fallback behavior for dependency failures
+- define clear fallback paths when Kafka or Redis is unavailable,
+- apply buffering/retry/circuit-breaking policies to avoid full request-path failure,
+- keep connection service behavior predictable during partial outages.
+
+3. Improve graceful degradation and graceful shutdown
+- support controlled draining of WebSocket sessions during rollout/termination,
+- stop accepting new upgrades before process exit,
+- flush/close sinks and consumers safely to reduce message loss risk.
+
+4. Make horizontal scaling easier in Kubernetes
+- keep `connection` stateless per pod and externalize shared state/events,
+- strengthen partition/group routing patterns for multi-replica fan-out,
+- tune autoscaling signals (connection count, queue lag, CPU/memory) for real-time traffic.
 
 ## Testing
 

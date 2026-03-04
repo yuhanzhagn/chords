@@ -14,11 +14,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+const devSharedJWTSecret = "dev-shared-jwt-secret"
 
 type ConnectionJWTClaims struct {
 	UserID string `json:"user_id"`
@@ -169,20 +170,15 @@ func main() {
 		}
 	}()
 
-	jwtSecret := os.Getenv("CONNECTION_JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "CHANGE_ME"
-	}
-
 	//jwt auth middleware
 	jwtMiddleware := middlewares.JWTAuthMiddleware[*ConnectionJWTClaims](middlewares.JWTAuthOptions[*ConnectionJWTClaims]{
 		NewClaims: func() *ConnectionJWTClaims {
 			return &ConnectionJWTClaims{}
 		},
 		Keyfunc: middlewares.KeyfuncByAlgorithm(map[string]any{
-			jwt.SigningMethodHS256.Alg(): []byte(jwtSecret),
-			jwt.SigningMethodHS384.Alg(): []byte(jwtSecret),
-			jwt.SigningMethodHS512.Alg(): []byte(jwtSecret),
+			jwt.SigningMethodHS256.Alg(): []byte(devSharedJWTSecret),
+			jwt.SigningMethodHS384.Alg(): []byte(devSharedJWTSecret),
+			jwt.SigningMethodHS512.Alg(): []byte(devSharedJWTSecret),
 		}),
 	})
 

@@ -7,7 +7,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var secret = []byte("CHANGE_ME")
+const devSharedJWTSecret = "dev-shared-jwt-secret"
+
+var secret = []byte(devSharedJWTSecret)
 
 type Claims struct {
 	Username  string `json:"Username"`
