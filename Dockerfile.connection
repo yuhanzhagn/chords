@@ -1,0 +1,21 @@
+FROM golang:1.24-bookworm AS builder
+WORKDIR /src/connection
+
+COPY connection/go.mod connection/go.sum ./
+RUN go mod download
+
+COPY connection/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/connection ./cmd/server/main.go
+
+FROM debian:bookworm-slim
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /out/connection /app/connection
+COPY connection/configs /app/configs
+
+EXPOSE 8081
+CMD ["/app/connection"]
