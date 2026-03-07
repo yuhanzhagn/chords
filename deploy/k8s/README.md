@@ -1,6 +1,6 @@
-# Kubernetes (kind) - phase 1 (backend + gateway)
+# Kubernetes (kind) - backend + gateway + redis + kafka
 
-This phase moves `backend` and `connection` to Kubernetes first.
+This setup runs `backend`, `connection`, `redis`, and single-node `kafka` in kind.
 
 ## Prerequisites
 
@@ -8,10 +8,6 @@ This phase moves `backend` and `connection` to Kubernetes first.
 - kubectl
 - Docker
 - An ingress controller in cluster (manifests assume `ingressClassName: nginx`)
-
-Important: `backend` and `connection` still depend on `redis:6379` and `kafka:9092`.
-In this first phase, those services must already exist in the same Kubernetes cluster/namespace,
-or pods will fail at startup.
 
 ## 1) Create kind cluster
 
@@ -49,6 +45,8 @@ kubectl apply -k deploy/k8s/base
 
 ```bash
 kubectl -n gochatroom get pods,svc,ingress
+kubectl -n gochatroom logs deploy/redis
+kubectl -n gochatroom logs deploy/kafka
 kubectl -n gochatroom logs deploy/backend
 kubectl -n gochatroom logs deploy/connection
 ```
