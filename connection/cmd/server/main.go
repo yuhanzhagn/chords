@@ -14,12 +14,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 const devSharedJWTSecret = "dev-shared-jwt-secret"
+
+var nextWSClientID atomic.Uint32
 
 type ConnectionJWTClaims struct {
 	UserID string `json:"user_id"`
@@ -28,7 +31,10 @@ type ConnectionJWTClaims struct {
 
 func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := uint32(10)
+		userID := nextWSClientID.Add(1)
+		if userID == 0 {
+			userID = nextWSClientID.Add(1)
+		}
 		gateway.ServeWs(userID, w, r, hub, inboundHandler)
 	})
 }
