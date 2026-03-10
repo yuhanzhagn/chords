@@ -7,34 +7,75 @@ import { KafkaEvent } from "../proto/kafka/event";
 
 export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: any) => void) {
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const shouldReconnectRef = useRef(true);
 
   useEffect(() => {
     if (!user || !token) return;
 
-    const socket = createSocket();
-    socketRef.current = socket;
-    const id = (BigInt(user.id) * 10_000_000_000_000n + BigInt(Date.now())).toString();
+    shouldReconnectRef.current = true;
 
-    socket.onopen = () => {
-      console.log("WebSocket connection established");
+    const scheduleReconnect = () => {
+      if (!shouldReconnectRef.current || reconnectTimerRef.current) return;
+
+      reconnectAttemptsRef.current += 1;
+      const baseDelayMs = 500;
+      const maxDelayMs = 30_000;
+      const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** (reconnectAttemptsRef.current - 1));
+      const jittered = backoff * (0.5 + Math.random());
+
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        connect();
+      }, jittered);
     };
 
-    socket.onmessage = (e) => {
-      try {
-        const uint8Array = new Uint8Array(e.data);
-        const decodedEvent = KafkaEvent.decode(uint8Array);
-        onMessage?.(decodedEvent);
-      } catch (err) {
-        console.error("Failed to decode KafkaEvent:", err);
-      }
+    const connect = () => {
+      if (!shouldReconnectRef.current) return;
+      const socket = createSocket();
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        reconnectAttemptsRef.current = 0;
+        console.log("WebSocket connection established");
+      };
+
+      socket.onmessage = (e) => {
+        try {
+          const uint8Array = new Uint8Array(e.data);
+          const decodedEvent = KafkaEvent.decode(uint8Array);
+          onMessage?.(decodedEvent);
+        } catch (err) {
+          console.error("Failed to decode KafkaEvent:", err);
+        }
+      };
+
+      socket.onclose = () => {
+        scheduleReconnect();
+      };
+
+      socket.onerror = () => {
+        scheduleReconnect();
+      };
     };
+
+    connect();
     console.log(user.username, token);
     return () => {
+      shouldReconnectRef.current = false;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+
+      const current = socketRef.current;
       if (
-        socket.readyState === WebSocket.OPEN ||
-        socket.readyState === WebSocket.CONNECTING
+        current &&
+        (current.readyState === WebSocket.OPEN ||
+          current.readyState === WebSocket.CONNECTING)
       ) {
-        socket.close();
+        current.close();
       }
 
       socketRef.current = null;
