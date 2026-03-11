@@ -153,31 +153,59 @@ func setupOutboundHandlerChain(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.Ha
 }
 
 func main() {
-	cfg, err := app.LoadConfig("configs/config.yaml")
+	cfg := mustLoadConfig("configs/config.yaml")
+
+	eventCodec := newEventCodec(cfg.Event.Codec)
+	hub := newHub(eventCodec)
+
+	multiSink, closeSink := mustSetupMultiSink(cfg, eventCodec)
+	defer closeSink()
+
+	jwtMiddleware := newJWTMiddleware()
+	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
+
+	mux := newMux(hub, inboundHandler)
+	outboundSource := mustStartOutboundSource(cfg, hub, eventCodec)
+	defer stopOutboundSource(outboundSource)
+
+	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func mustLoadConfig(path string) *app.Config {
+	cfg, err := app.LoadConfig(path)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	return cfg
+}
 
-	mux := http.NewServeMux()
-	eventCodec := newEventCodec(cfg.Event.Codec)
+func newHub(eventCodec codec.EventCodec[*kafkapb.KafkaEvent]) *gateway.Hub[*kafkapb.KafkaEvent] {
 	eventRouter := gateway.EventRouter[*kafkapb.KafkaEvent]{
 		MsgType: func(e *kafkapb.KafkaEvent) string { return e.MsgType },
 		GroupID: func(e *kafkapb.KafkaEvent) uint32 { return e.RoomId },
 	}
-	hub := gateway.NewHub(gateway.NewMemoryStore(), eventCodec, eventRouter)
+	return gateway.NewHub(gateway.NewMemoryStore(), eventCodec, eventRouter)
+}
 
+func mustSetupMultiSink(
+	cfg *app.Config,
+	eventCodec codec.EventCodec[*kafkapb.KafkaEvent],
+) (sink.Sink[*kafkapb.KafkaEvent], func()) {
 	multiSink, closeSink, err := setupMultiSink(cfg, eventCodec)
 	if err != nil {
 		log.Fatalf("failed to setup multi sink: %v", err)
 	}
-	defer func() {
+	return multiSink, func() {
 		if err := closeSink(); err != nil {
 			log.Printf("failed to close inbound sink: %v", err)
 		}
-	}()
+	}
+}
 
-	//jwt auth middleware
-	jwtMiddleware := middlewares.JWTAuthMiddleware[*ConnectionJWTClaims](middlewares.JWTAuthOptions[*ConnectionJWTClaims]{
+func newJWTMiddleware() handler.Middleware {
+	return middlewares.JWTAuthMiddleware[*ConnectionJWTClaims](middlewares.JWTAuthOptions[*ConnectionJWTClaims]{
 		NewClaims: func() *ConnectionJWTClaims {
 			return &ConnectionJWTClaims{}
 		},
@@ -187,16 +215,27 @@ func main() {
 			jwt.SigningMethodHS512.Alg(): []byte(devSharedJWTSecret),
 		}),
 	})
+}
 
-	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
-
+func newMux(
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	inboundHandler handler.HandlerFunc,
+) *http.ServeMux {
+	mux := http.NewServeMux()
 	wsHandler := WsHandler(hub, inboundHandler)
 	globalConnLimiter := middlewares.GlobalConnectionRateLimitMiddleware(middlewares.GlobalConnectionRateLimitOptions{
 		RatePerSecond: 30,
 		Burst:         60,
 	})
 	mux.Handle("/ws", globalConnLimiter(wsHandler))
+	return mux
+}
 
+func mustStartOutboundSource(
+	cfg *app.Config,
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	eventCodec codec.EventCodec[*kafkapb.KafkaEvent],
+) *source.KafkaSource[*kafkapb.KafkaEvent] {
 	outboundHandler := setupOutboundHandlerChain(hub)
 	outboundSource, err := source.NewKafkaSource[*kafkapb.KafkaEvent](outboundHandler, source.KafkaSourceOptions[*kafkapb.KafkaEvent]{
 		Brokers: cfg.Kafka.Brokers,
@@ -211,23 +250,18 @@ func main() {
 		log.Fatalf("failed to setup kafka outbound source: %v", err)
 	}
 
-	sourceCtx, cancelSource := context.WithCancel(context.Background())
-	defer cancelSource()
-
+	sourceCtx := context.Background()
 	if err := outboundSource.Start(sourceCtx); err != nil {
 		log.Fatalf("failed to start kafka outbound source: %v", err)
 	}
+	return outboundSource
+}
 
-	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := outboundSource.Stop(stopCtx); err != nil {
-			log.Printf("failed to stop outbound source: %v", err)
-		}
-	}()
-
-	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
-		log.Fatal(err)
+func stopOutboundSource(outboundSource *source.KafkaSource[*kafkapb.KafkaEvent]) {
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := outboundSource.Stop(stopCtx); err != nil {
+		log.Printf("failed to stop outbound source: %v", err)
 	}
 }
 
