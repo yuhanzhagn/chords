@@ -3,6 +3,7 @@ package gateway
 import (
 	"connection/internal/event/codec"
 	"log"
+	"sync"
 
 	gws "github.com/gorilla/websocket"
 )
@@ -12,6 +13,21 @@ type Client struct {
 	Conn      *Connection
 	SendChan  chan []byte
 	wsMsgType int
+	closeOnce sync.Once
+}
+
+func (c *Client) Close() {
+	if c == nil {
+		return
+	}
+	c.closeOnce.Do(func() {
+		if c.SendChan != nil {
+			close(c.SendChan)
+		}
+		if c.Conn != nil && c.Conn.Ws != nil {
+			_ = c.Conn.Ws.Close()
+		}
+	})
 }
 
 type EventRouter[T any] struct {
@@ -77,7 +93,9 @@ func (h *Hub[T]) Broadcast(groupID uint32, msg []byte) {
 		select {
 		case c.SendChan <- msg:
 		default:
-			// Handle full channel, e.g., drop message or disconnect client
+			log.Printf("dropping slow client: client_id=%d group_id=%d", c.ID, groupID)
+			h.RemoveClient(c.ID)
+			c.Close()
 		}
 	}
 }

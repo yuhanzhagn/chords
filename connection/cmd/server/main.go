@@ -191,7 +191,11 @@ func main() {
 	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
 
 	wsHandler := WsHandler(hub, inboundHandler)
-	mux.Handle("/ws", wsHandler)
+	globalConnLimiter := middlewares.GlobalConnectionRateLimitMiddleware(middlewares.GlobalConnectionRateLimitOptions{
+		RatePerSecond: 30,
+		Burst:         60,
+	})
+	mux.Handle("/ws", globalConnLimiter(wsHandler))
 
 	outboundHandler := setupOutboundHandlerChain(hub)
 	outboundSource, err := source.NewKafkaSource[*kafkapb.KafkaEvent](outboundHandler, source.KafkaSourceOptions[*kafkapb.KafkaEvent]{
