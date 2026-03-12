@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createSocket } from "../services/socket";
-import { v4 as uuidv4 } from "uuid";
 import { UserInfo } from "../types/user";
-import { SocketPayload } from "../types/socket";
 import { KafkaEvent } from "../proto/kafka/event";
 
 export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: any) => void) {
@@ -80,7 +78,7 @@ export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: a
 
       socketRef.current = null;
     };
-  }, [user?.id, token]);
+  }, [user, token, onMessage]);
 
   function send(payload: KafkaEvent) {
     const ws = socketRef.current;
