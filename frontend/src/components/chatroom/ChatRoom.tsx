@@ -82,20 +82,22 @@ export default function ChatRoom() {
   }
 
   return (
-    <div className="chat-layout">
-      <ChatSidebar
-        chatrooms={chatrooms}
-        loading={loading}
-        selectedChatroom={room}
-        onSelectChatroom={selectRoom}
-      />
+    <section className="page-card chat-shell">
+      <div className="chat-layout">
+        <ChatSidebar
+          chatrooms={chatrooms}
+          loading={loading}
+          selectedChatroom={room}
+          onSelectChatroom={selectRoom}
+        />
 
-      <ChatWindow
-        chatroom={room}
-        messages={msgStore.messages}
-        loading={msgStore.loading}
-        onSendMessage={send}
-      />
-    </div>
+        <ChatWindow
+          chatroom={room}
+          messages={msgStore.messages}
+          loading={msgStore.loading}
+          onSendMessage={send}
+        />
+      </div>
+    </section>
   );
 }

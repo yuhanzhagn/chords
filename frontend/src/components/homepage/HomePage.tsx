@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 //import { useUser } from '../context/UserProvider';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 
 interface HomePageProps {
@@ -59,18 +59,43 @@ const handleLogout = async () => {
 
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h2>Welcome to the Home Page</h2>
-
-      {token ? (
-        <>
-          <p>You are logged in! ?</p>
-          <button onClick={handleLogout}>Logout</button>
-        </>
-      ) : (
-        <p>Please <a href="/login">log in</a> or <a href="/register">register</a>.</p>
-      )}
-    </div>
+    <section className="page-card">
+      <div className="hero">
+        <div>
+          <div className="status-pill">
+            {token ? "Authenticated session" : "Guest mode"}
+          </div>
+          <h2 className="hero-title">Welcome to your realtime chat hub.</h2>
+          <p className="hero-text">
+            Jump into live rooms, search active spaces, and keep conversations moving
+            with low-latency messaging. This UI is designed to stay focused on what matters:
+            the chat.
+          </p>
+          <div className="hero-actions">
+            {token ? (
+              <>
+                <Link to="/chatroom" className="button">Open Chatroom</Link>
+                <Link to="/searchchatroom" className="button secondary">Search Rooms</Link>
+                <button className="button secondary" onClick={handleLogout}>Logout</button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="button">Login</Link>
+                <Link to="/register" className="button secondary">Create Account</Link>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="page-card" style={{ background: "var(--surface-2)" }}>
+          <h3 style={{ marginTop: 0 }}>Quick tips</h3>
+          <ul style={{ margin: 0, paddingLeft: "18px", color: "var(--muted)" }}>
+            <li>Keep one tab per room for better focus.</li>
+            <li>Search rooms to discover new conversations.</li>
+            <li>Reconnects are smoothed to avoid spikes.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }
 

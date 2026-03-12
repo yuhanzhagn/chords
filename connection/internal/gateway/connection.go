@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"connection/internal/handler"
 	"errors"
 	"log"
@@ -43,6 +44,8 @@ type Connection struct {
 	Send           chan []byte
 	inboundHandler handler.HandlerFunc
 	Request        *http.Request
+	Ctx            context.Context
+	Cancel         context.CancelFunc
 }
 
 func NewConnection(ws WSConn, inboundHandler handler.HandlerFunc, request *http.Request) (*Connection, error) {
@@ -55,10 +58,13 @@ func NewConnection(ws WSConn, inboundHandler handler.HandlerFunc, request *http.
 	if request == nil {
 		return nil, errors.New("http request is required")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Connection{
 		Ws:             ws,
 		inboundHandler: inboundHandler,
 		Request:        request,
+		Ctx:            ctx,
+		Cancel:         cancel,
 	}, nil
 }
 
@@ -99,6 +105,9 @@ func ServeWs[T any](
 func readPump[T any](c *Client, hub *Hub[T]) {
 	defer func() {
 		log.Printf("Websocket is closing.")
+		if c.Conn.Cancel != nil {
+			c.Conn.Cancel()
+		}
 		c.Conn.Ws.Close()
 	}()
 
@@ -116,7 +125,7 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 		}
 
 		err = c.Conn.inboundHandler(&handler.Context{
-			Context:    c.Conn.Request.Context(),
+			Context:    c.Conn.Ctx,
 			ClientID:   c.ID,
 			Event:      InboundEvent[T]{ClientID: c.ID, Event: event},
 			ReceivedAt: time.Now(),

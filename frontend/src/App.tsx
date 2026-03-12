@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import './App.css';
 import HomePage from './components/homepage/HomePage';
 import LoginForm from './components/login/LoginForm';
 import RegisterForm from './components/register/RegisterForm';
@@ -33,30 +34,44 @@ function App() {
   return (
   //  <UserProvider>
     <Router>
-      <nav style={{ margin: '10px' }}>
-        <Link to="/" style={{ marginRight: '10px' }}>home</Link>
-        {!isAuth ? (<>
-        <Link to="/login" style={{ marginRight: '10px' }}>login</Link>
-        <Link to="/register" style={{ marginRight: '10px' }}>register</Link>
-        </>):(<></>)
-        }
-        {isAuth ?(
-        <>
-        <Link to="/chatroom" style={{ marginRight: '10px' }}>chatroom</Link>
-        <Link to="/searchchatroom" style={{ marginRight: '10px' }}>search chatroom</Link>
-        </>):(<></>)
-        }
-      </nav>
+      <div className="app-shell">
+        <header className="topbar">
+          <div className="brand">
+            <div className="brand-mark" aria-hidden />
+            <div className="brand-text">
+              <div className="brand-title">GoChatroom</div>
+              <div className="brand-subtitle">Realtime chat, clean and fast</div>
+            </div>
+          </div>
+          <nav className="nav-links">
+            <Link to="/" className="nav-link">Home</Link>
+            {!isAuth ? (
+              <>
+                <Link to="/login" className="nav-link">Login</Link>
+                <Link to="/register" className="nav-link nav-link--primary">Register</Link>
+              </>
+            ) : null}
+            {isAuth ? (
+              <>
+                <Link to="/chatroom" className="nav-link">Chatroom</Link>
+                <Link to="/searchchatroom" className="nav-link">Search</Link>
+              </>
+            ) : null}
+          </nav>
+        </header>
 
-      <Routes>
-        <Route path="/" element={<HomePage setIsAuth={setIsAuth} />} />
-        <Route element={<PublicRoute isAuthenticated={isAuth} />}>
-            <Route path="/login" element={<LoginForm setIsAuth={setIsAuth} />} />
-            <Route path="/register" element={<RegisterForm />} />
-        </Route>
-        <Route path="/chatroom" element={<ChatRoom />} />
-        <Route path="/searchchatroom" element={<SearchPage />} />
-      </Routes>
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={<HomePage setIsAuth={setIsAuth} />} />
+            <Route element={<PublicRoute isAuthenticated={isAuth} />}>
+              <Route path="/login" element={<LoginForm setIsAuth={setIsAuth} />} />
+              <Route path="/register" element={<RegisterForm />} />
+            </Route>
+            <Route path="/chatroom" element={<ChatRoom />} />
+            <Route path="/searchchatroom" element={<SearchPage />} />
+          </Routes>
+        </main>
+      </div>
 
     </Router>
   //  </UserProvider>
