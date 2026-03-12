@@ -47,6 +47,6 @@ func FallbackHandler(c *gin.Context) {
 		},
 	}
 
-	c.JSON(200, response) // or 503 if you prefer
+	c.JSON(503, response)
 	c.Abort()
 }
