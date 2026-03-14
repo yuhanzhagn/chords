@@ -1,13 +1,47 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  :root {
+    --background: 200 28% 10%;
+    --foreground: 210 40% 96%;
+
+    --card: 200 28% 14%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 200 28% 14%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 38 92% 50%;
+    --primary-foreground: 210 30% 10%;
+
+    --secondary: 200 20% 20%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 200 16% 24%;
+    --muted-foreground: 213 15% 72%;
+
+    --accent: 18 92% 62%;
+    --accent-foreground: 210 30% 10%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 210 40% 96%;
+
+    --border: 200 20% 24%;
+    --input: 200 24% 18%;
+    --ring: 38 92% 50%;
+
+    --radius: 1rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    min-height: 100vh;
+    background-image: radial-gradient(circle at top, rgba(31, 58, 65, 0.9) 0%, rgba(15, 27, 31, 0.95) 55%, rgba(11, 21, 25, 0.98) 100%);
+  }
 }

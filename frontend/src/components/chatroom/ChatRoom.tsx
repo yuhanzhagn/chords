@@ -4,7 +4,7 @@ import ChatWindow from "./ChatWindow";
 import { useChatrooms } from "../../hooks/useChatrooms";
 import { useMessages } from "../../hooks/useMessages";
 import { useChatSocket } from "../../hooks/useChatSocket";
-import './chat.css'
+import { Card } from "../ui/card";
 import { KafkaEvent } from "../../proto/kafka/event";
 
 function toIsoTime(createdAt: string): string {
@@ -28,21 +28,24 @@ export default function ChatRoom() {
   const [room, setRoom] = useState<any>(null);
   const msgStore = useMessages(room?.ID, user?.id, token);
 
-  const handleSocketMessage = useCallback((payload: KafkaEvent) => {
-    if (payload.msgType === "message") {
-      console.log("Received message event:", payload);
-      msgStore.confirm({
-        ID: payload.id,
-        UserID: payload.userId,
-        RoomID: payload.roomId,
-        Content: new TextDecoder().decode(payload.content),
-        CreatedAt: toIsoTime(payload.createdAt),
-        TempID: payload.tempId,
-        status: "sent",
-        fromself: payload.userId === user?.id,
-      });
-    }
-  }, [msgStore, user?.id]);
+  const handleSocketMessage = useCallback(
+    (payload: KafkaEvent) => {
+      if (payload.msgType === "message") {
+        console.log("Received message event:", payload);
+        msgStore.confirm({
+          ID: payload.id,
+          UserID: payload.userId,
+          RoomID: payload.roomId,
+          Content: new TextDecoder().decode(payload.content),
+          CreatedAt: toIsoTime(payload.createdAt),
+          TempID: payload.tempId,
+          status: "sent",
+          fromself: payload.userId === user?.id,
+        });
+      }
+    },
+    [msgStore, user?.id]
+  );
 
   const socket = useChatSocket(user, token, handleSocketMessage);
 
@@ -81,8 +84,8 @@ export default function ChatRoom() {
   }
 
   return (
-    <section className="page-card chat-shell">
-      <div className="chat-layout">
+    <Card className="overflow-hidden border-border/70 bg-card/95">
+      <div className="grid min-h-[70vh] grid-cols-1 lg:grid-cols-[280px_1fr]">
         <ChatSidebar
           chatrooms={chatrooms}
           loading={loading}
@@ -97,6 +100,6 @@ export default function ChatRoom() {
           onSendMessage={send}
         />
       </div>
-    </section>
+    </Card>
   );
 }

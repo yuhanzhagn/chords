@@ -3,8 +3,6 @@ import type { FormEvent } from 'react';
 import MessageList from "./MessageList";
 import MessageComposer from "./MessageComposer";
 import type { ChatMessage } from '../../types/chat';
-import './chat.css'
-
 
 interface ChatroomInfo {
   ID: number;
@@ -35,16 +33,19 @@ const ChatWindow = ({ chatroom, messages, loading, onSendMessage }: ChatWindowPr
 
   if (!chatroom) {
     return (
-      <section className="chat-window chat-window--empty">
+      <section className="flex min-h-[60vh] flex-1 items-center justify-center bg-card text-muted-foreground">
         <p>Select a chatroom to start chatting.</p>
       </section>
     );
   }
 
   return (
-    <section className="chat-window">
-      <header className="chat-header">
-        <h2 className="chat-title">{chatroom.Name}</h2>
+    <section className="flex min-h-[60vh] flex-1 flex-col bg-card">
+      <header className="flex items-center justify-between border-b border-border/70 bg-background/40 px-6 py-4">
+        <div>
+          <h2 className="text-lg font-semibold">{chatroom.Name}</h2>
+          <p className="text-xs text-muted-foreground">Room ID #{chatroom.ID}</p>
+        </div>
       </header>
 
       <MessageList messages={messages} loading={loading} />

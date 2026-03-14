@@ -1,4 +1,5 @@
-import "./SearchPage.css"; // optional CSS for results
+import { Button } from '../ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 
 interface Room {
   ID: number;
@@ -12,16 +13,28 @@ interface ResultListProps {
 
 export default function ResultList({ results, onRoomClick }: ResultListProps) {
   return (
-    <ul className="results-list">
-      {results.map(room => (
-        <li
-          key={room.ID}
-          className="result-item"
-          onClick={() => onRoomClick(room)}
-        >
-          {room.Name}
-        </li>
-      ))}
-    </ul>
+    <Card className="border-border/70 bg-card/90">
+      <CardHeader>
+        <CardTitle>Rooms</CardTitle>
+        <CardDescription>
+          {results.length === 0
+            ? "No rooms yet. Try a different search."
+            : `${results.length} room${results.length === 1 ? "" : "s"} available.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {results.map(room => (
+          <Button
+            key={room.ID}
+            variant="secondary"
+            className="w-full justify-between"
+            onClick={() => onRoomClick(room)}
+          >
+            <span>{room.Name}</span>
+            <span className="text-xs text-muted-foreground">#{room.ID}</span>
+          </Button>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

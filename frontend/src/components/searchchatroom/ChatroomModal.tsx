@@ -1,4 +1,12 @@
-import "./SearchPage.css"; // CSS for modal
+import { Button } from '../ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 
 interface Room {
   ID: number;
@@ -14,17 +22,22 @@ interface ChatroomModalProps {
 }
 
 export default function ChatroomModal({ show, onClose, chatroom, onJoin }: ChatroomModalProps) {
-  if (!show) return null;
   if (!chatroom) return null;
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content">
-        <h2>Join Chatroom</h2>
-        <p>Do you want to join <strong>{chatroom.Name || chatroom.name}</strong>?</p>
-        <button onClick={() => { onJoin(chatroom); onClose(); }}>Join</button>
-        <button onClick={onClose} className="cancel-btn">Cancel</button>
-      </div>
-    </div>
+    <Dialog open={show} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Join Chatroom</DialogTitle>
+          <DialogDescription>
+            Do you want to join <strong>{chatroom.Name || chatroom.name}</strong>?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => { onJoin(chatroom); onClose(); }}>Join</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react';
-import './chat.css'
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 
 interface MessageComposerProps {
   draft: string;
@@ -8,17 +9,19 @@ interface MessageComposerProps {
 }
 
 const MessageComposer = ({ draft, onDraftChange, onSubmit }: MessageComposerProps) => (
-  <form className="chat-composer" onSubmit={onSubmit}>
-    <input
+  <form
+    className="flex items-center gap-3 border-t border-border/70 bg-background/40 px-6 py-4"
+    onSubmit={onSubmit}
+  >
+    <Input
       type="text"
       value={draft}
       placeholder="Type a message…"
       onChange={(e) => onDraftChange(e.target.value)}
-      className="chat-input"
     />
-    <button type="submit" className="chat-send-button">
+    <Button type="submit" className="shrink-0">
       Send
-    </button>
+    </Button>
   </form>
 );
 

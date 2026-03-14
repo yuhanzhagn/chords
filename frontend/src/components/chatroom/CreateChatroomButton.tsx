@@ -1,24 +1,25 @@
 import { useState, useContext } from 'react';
-import type { CSSProperties } from 'react';
 import { RefreshContext } from './RefreshContext';
-import './chat.css'
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Input } from '../ui/input';
 
 function CreateChatroomButton() {
-  const [showPopup, setShowPopup] = useState(false);
+  const [open, setOpen] = useState(false);
   const [chatroomName, setChatroomName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const triggerParentRefresh = useContext(RefreshContext);
   const jwttoken = localStorage.getItem("jwt");
-  const ipaddr = `${process.env.REACT_APP_URL}`
+  const ipaddr = `${process.env.REACT_APP_URL}`;
 
   const openPopup = () => {
     setChatroomName("");
-    setShowPopup(true);
+    setOpen(true);
   };
 
   const closePopup = () => {
-    setShowPopup(false);
+    setOpen(false);
     setError(null);
   };
 
@@ -36,7 +37,7 @@ function CreateChatroomButton() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-           "Authorization": `Bearer ${jwttoken}`,
+          "Authorization": `Bearer ${jwttoken}`,
         },
         body: JSON.stringify({ name: chatroomName }),
       });
@@ -49,7 +50,6 @@ function CreateChatroomButton() {
       console.log("Chatroom created:", data);
 
       triggerParentRefresh();
-      // Close popup after successful creation
       closePopup();
     } catch (err: unknown) {
       console.error(err);
@@ -60,66 +60,37 @@ function CreateChatroomButton() {
   };
 
   return (
-    <>
-      <button onClick={openPopup}>Create Chatroom</button>
-
-      {showPopup && (
-        <div style={styles.overlay}>
-          <div style={styles.popup}>
-            <h3>Create New Chatroom</h3>
-
-            <input
-              type="text"
-              placeholder="Enter chatroom name"
-              value={chatroomName}
-              onChange={(e) => setChatroomName(e.target.value)}
-              style={styles.input}
-            />
-
-            {error && <p style={{ color: "red" }}>{error}</p>}
-
-            <div style={styles.actions}>
-              <button onClick={handleCreate} disabled={loading}>
-                {loading ? "Creating..." : "Create"}
-              </button>
-              <button onClick={closePopup}>Cancel</button>
-            </div>
-          </div>
+    <Dialog open={open} onOpenChange={(next) => (next ? openPopup() : closePopup())}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="secondary">Create Chatroom</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Chatroom</DialogTitle>
+          <DialogDescription>Spin up a new space for your team.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Input
+            type="text"
+            placeholder="Enter chatroom name"
+            value={chatroomName}
+            onChange={(e) => setChatroomName(e.target.value)}
+          />
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
         </div>
-      )}
-    </>
+        <DialogFooter>
+          <Button variant="outline" onClick={closePopup} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={handleCreate} disabled={loading}>
+            {loading ? "Creating..." : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100vw",
-    height: "100vh",
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  popup: {
-    background: "white",
-    padding: "20px",
-    borderRadius: "8px",
-    width: "300px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-  },
-  input: {
-    padding: "8px",
-    fontSize: "14px",
-  },
-  actions: {
-    display: "flex",
-    justifyContent: "space-between",
-  },
-};
 
 export default CreateChatroomButton;

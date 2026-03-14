@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
-import type { CSSProperties, KeyboardEvent } from 'react';
-import './chat.css'
+import type { KeyboardEvent } from 'react';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Input } from '../ui/input';
+import { ScrollArea } from '../ui/scroll-area';
 
 interface ChatRoomBackupProps {
   roomId: string;
@@ -48,61 +51,33 @@ const ChatRoom = ({ roomId, userId }: ChatRoomBackupProps) => {
   };
 
   return (
-    <div style={styles.container}>
-      <h2>Chat Room #{roomId}</h2>
-      <div style={styles.chatBox}>
-        {messages.map((msg, index) => (
-          <div key={index} style={styles.message}>
-            {msg}
+    <Card className="mx-auto w-full max-w-md">
+      <CardHeader>
+        <CardTitle>Chat Room #{roomId}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ScrollArea className="h-72 rounded-xl border border-border/70 bg-background/40">
+          <div className="space-y-2 p-3 text-sm">
+            {messages.map((msg, index) => (
+              <div key={index} className="rounded-lg border border-border/60 bg-secondary/40 px-3 py-2">
+                {msg}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div style={styles.inputBox}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder="Type a message..."
-          style={styles.input}
-        />
-        <button onClick={sendMessage} style={styles.button}>
-          Send
-        </button>
-      </div>
-    </div>
+        </ScrollArea>
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="Type a message..."
+          />
+          <Button onClick={sendMessage}>Send</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
-};
-
-const styles: Record<string, CSSProperties> = {
-  container: {
-    width: "400px",
-    margin: "0 auto",
-    fontFamily: "Arial, sans-serif",
-  },
-  chatBox: {
-    border: "1px solid #ccc",
-    height: "300px",
-    overflowY: "auto",
-    padding: "10px",
-    marginBottom: "10px",
-  },
-  message: {
-    padding: "5px 0",
-    borderBottom: "1px solid #eee",
-  },
-  inputBox: {
-    display: "flex",
-  },
-  input: {
-    flex: 1,
-    padding: "8px",
-  },
-  button: {
-    padding: "8px 12px",
-    marginLeft: "5px",
-    cursor: "pointer",
-  },
 };
 
 export default ChatRoom;

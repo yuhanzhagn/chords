@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 //import { useUser } from '../context/UserProvider';
 import { Link, useNavigate } from 'react-router-dom';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 
 
 interface HomePageProps {
@@ -59,43 +62,60 @@ const handleLogout = async () => {
 
 
   return (
-    <section className="page-card">
-      <div className="hero">
-        <div>
-          <div className="status-pill">
+    <Card className="border-border/60 bg-card/90">
+      <CardContent className="grid gap-8 p-8 md:grid-cols-[1.2fr_0.8fr] md:items-center">
+        <div className="space-y-6">
+          <Badge variant="accent">
             {token ? "Authenticated session" : "Guest mode"}
+          </Badge>
+          <div className="space-y-3">
+            <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+              Welcome to your realtime chat hub.
+            </h2>
+            <p className="text-muted-foreground">
+              Jump into live rooms, search active spaces, and keep conversations moving
+              with low-latency messaging. This UI is designed to stay focused on what matters:
+              the chat.
+            </p>
           </div>
-          <h2 className="hero-title">Welcome to your realtime chat hub.</h2>
-          <p className="hero-text">
-            Jump into live rooms, search active spaces, and keep conversations moving
-            with low-latency messaging. This UI is designed to stay focused on what matters:
-            the chat.
-          </p>
-          <div className="hero-actions">
+          <div className="flex flex-wrap gap-3">
             {token ? (
               <>
-                <Link to="/chatroom" className="button">Open Chatroom</Link>
-                <Link to="/searchchatroom" className="button secondary">Search Rooms</Link>
-                <button className="button secondary" onClick={handleLogout}>Logout</button>
+                <Button asChild>
+                  <Link to="/chatroom">Open Chatroom</Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link to="/searchchatroom">Search Rooms</Link>
+                </Button>
+                <Button variant="outline" onClick={handleLogout}>
+                  Logout
+                </Button>
               </>
             ) : (
               <>
-                <Link to="/login" className="button">Login</Link>
-                <Link to="/register" className="button secondary">Create Account</Link>
+                <Button asChild>
+                  <Link to="/login">Login</Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link to="/register">Create Account</Link>
+                </Button>
               </>
             )}
           </div>
         </div>
-        <div className="page-card" style={{ background: "var(--surface-2)" }}>
-          <h3 style={{ marginTop: 0 }}>Quick tips</h3>
-          <ul style={{ margin: 0, paddingLeft: "18px", color: "var(--muted)" }}>
-            <li>Keep one tab per room for better focus.</li>
-            <li>Search rooms to discover new conversations.</li>
-            <li>Reconnects are smoothed to avoid spikes.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+        <Card className="border-border/70 bg-secondary/40 shadow-none">
+          <CardHeader>
+            <CardTitle className="text-lg">Quick tips</CardTitle>
+            <CardDescription>Stay focused and keep rooms tidy.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>Keep one tab per room for better focus.</p>
+            <p>Search rooms to discover new conversations.</p>
+            <p>Reconnects are smoothed to avoid spikes.</p>
+          </CardContent>
+        </Card>
+      </CardContent>
+    </Card>
   );
 }
 
