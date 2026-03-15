@@ -19,6 +19,7 @@ type MessageService interface {
 	GetMessagesByChatRoom(chatRoomID uint) ([]model.Message, error)
 	DeleteMessage(id uint) error
 	GetMessagesWithLimit(roomID uint, limit int) ([]model.Message, error)
+	GetMessagesPage(roomID uint, beforeID uint, limit int) ([]model.Message, error)
 }
 
 func (s *messageService) CreateMessage(userID, roomID uint, content string) (*model.Message, error) {
@@ -52,4 +53,8 @@ func (s *messageService) DeleteMessage(id uint) error {
 
 func (s *messageService) GetMessagesWithLimit(roomID uint, limit int) ([]model.Message, error) {
 	return s.repos.Message.GetByRoomIDWithLimit(roomID, limit)
+}
+
+func (s *messageService) GetMessagesPage(roomID uint, beforeID uint, limit int) ([]model.Message, error) {
+	return s.repos.Message.GetByRoomIDBeforeWithLimit(roomID, beforeID, limit)
 }

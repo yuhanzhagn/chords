@@ -209,3 +209,8 @@ func (m *MockMessageService) GetMessagesWithLimit(roomID uint, limit int) ([]mod
 	args := m.Called(roomID, limit)
 	return args.Get(0).([]model.Message), args.Error(1)
 }
+
+func (m *MockMessageService) GetMessagesPage(roomID uint, beforeID uint, limit int) ([]model.Message, error) {
+	args := m.Called(roomID, beforeID, limit)
+	return args.Get(0).([]model.Message), args.Error(1)
+}

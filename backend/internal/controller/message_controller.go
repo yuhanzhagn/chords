@@ -48,7 +48,41 @@ func (mc *MessageController) GetMessagesByChatRoom(c *gin.Context) {
 		return
 	}
 
-	messages, err := mc.MessageService.GetMessagesByChatRoom(uint(chatRoomID))
+	limitParam := c.Query("limit")
+	beforeParam := c.Query("before_id")
+
+	if limitParam == "" && beforeParam == "" {
+		messages, err := mc.MessageService.GetMessagesByChatRoom(uint(chatRoomID))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, messages)
+		return
+	}
+
+	limit := 30
+	if limitParam != "" {
+		parsedLimit, err := strconv.Atoi(limitParam)
+		if err != nil || parsedLimit <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsedLimit
+	}
+
+	var beforeID uint64
+	if beforeParam != "" {
+		parsedBefore, err := strconv.ParseUint(beforeParam, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid before_id"})
+			return
+		}
+		beforeID = parsedBefore
+	}
+
+	messages, err := mc.MessageService.GetMessagesPage(uint(chatRoomID), uint(beforeID), limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

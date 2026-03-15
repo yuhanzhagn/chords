@@ -13,10 +13,13 @@ interface ChatWindowProps {
   chatroom: ChatroomInfo | null;
   messages: ChatMessage[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
   onSendMessage: (text: string) => void;
+  onLoadMore: () => void;
 }
 
-const ChatWindow = ({ chatroom, messages, loading, onSendMessage }: ChatWindowProps) => {
+const ChatWindow = ({ chatroom, messages, loading, loadingMore, hasMore, onSendMessage, onLoadMore }: ChatWindowProps) => {
   const [draft, setDraft] = useState("");
   console.log("messages in ChatWindow:", messages);
 
@@ -33,14 +36,14 @@ const ChatWindow = ({ chatroom, messages, loading, onSendMessage }: ChatWindowPr
 
   if (!chatroom) {
     return (
-      <section className="flex min-h-[60vh] flex-1 items-center justify-center bg-card text-muted-foreground">
+      <section className="flex h-full min-h-0 flex-1 items-center justify-center bg-card text-muted-foreground">
         <p>Select a chatroom to start chatting.</p>
       </section>
     );
   }
 
   return (
-    <section className="flex min-h-[60vh] flex-1 flex-col bg-card">
+    <section className="flex h-full min-h-0 flex-1 flex-col bg-card">
       <header className="flex items-center justify-between border-b border-border/70 bg-background/40 px-6 py-4">
         <div>
           <h2 className="text-lg font-semibold">{chatroom.Name}</h2>
@@ -48,7 +51,13 @@ const ChatWindow = ({ chatroom, messages, loading, onSendMessage }: ChatWindowPr
         </div>
       </header>
 
-      <MessageList messages={messages} loading={loading} />
+      <MessageList
+        messages={messages}
+        loading={loading}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        onLoadMore={onLoadMore}
+      />
 
       <MessageComposer draft={draft} onDraftChange={setDraft} onSubmit={handleSubmit} />
     </section>

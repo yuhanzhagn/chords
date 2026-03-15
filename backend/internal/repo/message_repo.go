@@ -10,6 +10,7 @@ type MessageRepo interface {
 	Create(msg *model.Message) error
 	GetByRoomID(roomID uint) ([]model.Message, error)
 	GetByRoomIDWithLimit(roomID uint, limit int) ([]model.Message, error)
+	GetByRoomIDBeforeWithLimit(roomID uint, beforeID uint, limit int) ([]model.Message, error)
 	Delete(id uint) (rowsAffected int64, err error)
 }
 
@@ -38,6 +39,22 @@ func (r *messageRepo) GetByRoomIDWithLimit(roomID uint, limit int) ([]model.Mess
 	var messages []model.Message
 	err := r.db.Where("room_id = ?", roomID).Order("created_at desc").Limit(limit).Find(&messages).Error
 	return messages, err
+}
+
+func (r *messageRepo) GetByRoomIDBeforeWithLimit(roomID uint, beforeID uint, limit int) ([]model.Message, error) {
+	var messages []model.Message
+	query := r.db.Where("room_id = ?", roomID)
+	if beforeID > 0 {
+		query = query.Where("id < ?", beforeID)
+	}
+	if err := query.Order("created_at desc").Limit(limit).Find(&messages).Error; err != nil {
+		return nil, err
+	}
+
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	return messages, nil
 }
 
 func (r *messageRepo) Delete(id uint) (int64, error) {

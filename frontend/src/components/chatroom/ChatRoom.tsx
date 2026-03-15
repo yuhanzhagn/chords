@@ -85,7 +85,7 @@ export default function ChatRoom() {
 
   return (
     <Card className="overflow-hidden border-border/70 bg-card/95">
-      <div className="grid min-h-[70vh] grid-cols-1 lg:grid-cols-[280px_1fr]">
+      <div className="grid h-[70vh] grid-cols-1 lg:grid-cols-[280px_1fr]">
         <ChatSidebar
           chatrooms={chatrooms}
           loading={loading}
@@ -97,7 +97,10 @@ export default function ChatRoom() {
           chatroom={room}
           messages={msgStore.messages}
           loading={msgStore.loading}
+          loadingMore={msgStore.loadingMore}
+          hasMore={msgStore.hasMore}
           onSendMessage={send}
+          onLoadMore={msgStore.loadMore}
         />
       </div>
     </Card>
