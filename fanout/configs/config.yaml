@@ -1,0 +1,19 @@
+kafka:
+  brokers:
+    - "kafka:9092"
+  consumer_group: "fanout-workers"
+  topics:
+    - "notification"
+
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+  room_users_prefix: "room:"
+  room_users_suffix: ":users"
+  user_gateway_prefix: "user:"
+  user_gateway_suffix: ":gateway"
+
+fanout:
+  gateway_path: "/fanout"
+  request_timeout: 3s
