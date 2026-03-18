@@ -90,13 +90,34 @@ func (h *Hub[T]) RemoveClientFromGroup(clientID uint32, groupID uint32) {
 func (h *Hub[T]) Broadcast(groupID uint32, msg []byte) {
 	clients := h.store.GetClientsInGroup(groupID)
 	for _, c := range clients {
-		select {
-		case c.SendChan <- msg:
-		default:
-			log.Printf("dropping slow client: client_id=%d group_id=%d", c.ID, groupID)
-			h.RemoveClient(c.ID)
-			c.Close()
+		h.sendToClient(c, msg, groupID)
+	}
+}
+
+func (h *Hub[T]) SendToClients(clientIDs []uint32, msg []byte) {
+	for _, clientID := range clientIDs {
+		client := h.store.GetClient(clientID)
+		if client == nil {
+			continue
 		}
+		h.sendToClient(client, msg, 0)
+	}
+}
+
+func (h *Hub[T]) sendToClient(client *Client, msg []byte, groupID uint32) {
+	if client == nil {
+		return
+	}
+	select {
+	case client.SendChan <- msg:
+	default:
+		if groupID == 0 {
+			log.Printf("dropping slow client: client_id=%d", client.ID)
+		} else {
+			log.Printf("dropping slow client: client_id=%d group_id=%d", client.ID, groupID)
+		}
+		h.RemoveClient(client.ID)
+		client.Close()
 	}
 }
 

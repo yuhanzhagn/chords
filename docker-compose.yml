@@ -39,19 +39,34 @@ services:
       - traefik.http.routers.connection.entrypoints=web
       - traefik.http.routers.connection.rule=PathPrefix(`/ws`)
       - traefik.http.services.connection.loadbalancer.server.port=8081
+  fanout:
+    build: .
+    container_name: go-fanout
+    depends_on:
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ./fanout:/app      # mount entire project folder with your binary
+    command: ./fanout  # run your binary inside container
+    networks:
+      - web
   frontend:
     image: node:18-alpine
     container_name: go-frontend
     working_dir: /app
     volumes:
       - ./frontend:/app
+      - /app/node_modules
     # ports:
     #   - "8000:8000"
     environment:
       - CHOKIDAR_USEPOLLING=true
       - PORT=8000
       - REACT_APP_URL=localhost:8000/api 
-    command: npm start
+    command: sh -c "npm install && npm start"
     networks:
       - web
 #    depends_on:

@@ -10,9 +10,10 @@ It is responsible for:
 - maintaining client WebSocket sessions,
 - running an inbound middleware pipeline (auth, rate limit, validation, routing),
 - forwarding inbound chat events to Kafka,
-- consuming outbound events from Kafka and fan-out broadcasting to connected clients.
+- accepting fanout HTTP pushes and broadcasting to connected clients.
 
 The `backend` service provides REST APIs, authentication/token issuance, and data/business logic, while `connection` handles live transport and event flow at runtime.
+The `fanout` service consumes outbound Kafka events, resolves room membership and gateway ownership via Redis, then delivers events to the appropriate gateway instances over HTTP.
 
 ## Tech Stack
 
@@ -20,6 +21,7 @@ The `backend` service provides REST APIs, authentication/token issuance, and dat
 |-----------|--------------|
 | **WS Gateway (`connection`)** | Go 1.24, [gorilla/websocket](https://github.com/gorilla/websocket), middleware pipeline, Kafka producer/consumer ([Sarama](https://github.com/IBM/sarama)), protobuf/json codecs |
 | **API Service (`backend`)** | Go 1.24, [Gin](https://github.com/gin-gonic/gin), [GORM](https://gorm.io), JWT issuance/validation, [Redis](https://redis.io), [Logrus](https://github.com/sirupsen/logrus), Kafka client ([Sarama](https://github.com/IBM/sarama)) |
+| **Fanout Workers (`fanout`)** | Go 1.24, Kafka consumer ([Sarama](https://github.com/IBM/sarama)), Redis registry, HTTP fanout to gateways |
 | **Frontend** | React 19, React Router, Create React App |
 | **Data** | SQLite (GORM), Redis (cache/sessions), Kafka (event bus) |
 | **Deploy** | Docker, Docker Compose, Traefik (reverse proxy) |
@@ -52,6 +54,14 @@ gochatroom/
 │   │   ├── platform/kafka/  # Kafka producer/consumer
 │   │   └── service/         # Message service
 │   └── proto/               # Gateway protobuf messages
+├── fanout/                  # Fanout worker service
+│   ├── cmd/worker/main.go   # Worker entry point
+│   ├── configs/config.yaml  # Worker config (kafka/redis/fanout)
+│   ├── internal/
+│   │   ├── fanout/          # HTTP dispatch to gateways
+│   │   ├── kafka/           # Kafka consumer
+│   │   └── registry/        # Redis registry lookups
+│   └── proto/               # Kafka protobuf messages
 ├── frontend/                # React SPA
 │   ├── src/
 │   │   ├── components/      # Login, register, chatroom, messages, etc.
@@ -64,6 +74,7 @@ gochatroom/
 ## Prerequisites
 
 - **Go** 1.24+ (for backend + connection)
+- **Go** 1.24+ (for fanout worker)
 - **Node.js** 18+ and npm (for frontend)
 - **Redis** (required by backend)
 - **Kafka** (required by backend/connection event flow)
@@ -102,6 +113,19 @@ JWT behavior in dev:
 - `connection` validates JWTs on WebSocket requests,
 - both use the same hardcoded key: `dev-shared-jwt-secret`.
 
+### 3. Fanout Worker (local)
+
+```bash
+cd fanout
+go mod download
+go run cmd/worker/main.go
+```
+
+The worker consumes outbound Kafka topics and posts fanout payloads to the gateway's `/fanout` endpoint.
+Redis key conventions used by the worker:
+- `room:{room_id}:users` set of user IDs in the room
+- `user:{user_id}:gateway` gateway address hosting that user
+
 ### 3. Frontend (local)
 
 ```bash
@@ -122,6 +146,7 @@ docker compose up --build
 - **Frontend**: `/`
 - **API**: `/api`
 - **WS Gateway**: `/ws`
+- **Fanout**: internal (posts to `/fanout` on gateway)
 - **Redis**: internal; exposed on `6379` for debugging if needed.
 - **Kafka**: internal; exposed on `9092`.
 
@@ -159,6 +184,32 @@ kafka:
   inbound_topic: "user-request"
 ```
 
+### Fanout Worker
+
+Edit `fanout/configs/config.yaml`:
+
+```yaml
+kafka:
+  brokers:
+    - "kafka:9092"
+  consumer_group: "fanout-workers"
+  topics:
+    - "notification"
+
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+  room_users_prefix: "room:"
+  room_users_suffix: ":users"
+  user_gateway_prefix: "user:"
+  user_gateway_suffix: ":gateway"
+
+fanout:
+  gateway_path: "/fanout"
+  request_timeout: 3s
+```
+
 ### Redis
 
 Backend connects to Redis in `backend/internal/redisdb/redis.go` (`Addr`, `Password`, `DB`). Use `redis:6379` when running in Docker, `localhost:6379` when running backend on the host.
@@ -176,6 +227,7 @@ In the current dev setup, the JWT is issued by `backend` and validated by both `
 | **Memberships** | `POST /api/memberships/add-user`, `GET /api/memberships/:username/chatrooms` (auth) |
 | **Messages** | `POST /api/messages`, `GET /api/chatrooms/:id/messages`, `DELETE /api/messages/:id` (auth) |
 | **WebSocket Gateway** | `GET /ws` (upgrade to WebSocket via the connection service) |
+| **Fanout Ingress** | `POST /fanout` (internal, used by fanout workers) |
 
 ## Connection Gateway Architecture
 
@@ -186,10 +238,11 @@ Inbound path (`client -> connection -> Kafka`):
 2. `connection` runs middleware chain (JWT auth, rate limiting, event filtering/routing).
 3. Message events are encoded and published to Kafka inbound topic.
 
-Outbound path (`Kafka -> connection -> client`):
-1. `connection` consumes outbound Kafka topics.
-2. Events are decoded and routed by room/group key.
-3. Matching connected clients receive broadcast messages over existing WebSocket sessions.
+Outbound path (`Kafka -> fanout -> connection -> client`):
+1. `fanout` consumes outbound Kafka topics.
+2. It looks up room membership and gateway ownership in Redis.
+3. `fanout` posts to `/fanout` on the owning gateway with a targeted user list.
+4. Matching connected clients receive broadcast messages over existing WebSocket sessions.
 
 This split lets `backend` remain focused on HTTP business APIs while `connection` scales independently for high-concurrency real-time traffic.
 

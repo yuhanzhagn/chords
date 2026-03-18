@@ -223,11 +223,13 @@ func newMux(
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	wsHandler := WsHandler(hub, inboundHandler)
+	fanoutHandler := source.NewFanoutHTTPHandler(hub)
 	globalConnLimiter := middlewares.GlobalConnectionRateLimitMiddleware(middlewares.GlobalConnectionRateLimitOptions{
 		RatePerSecond: 30,
 		Burst:         60,
 	})
 	mux.Handle("/ws", globalConnLimiter(wsHandler))
+	mux.Handle("/fanout", fanoutHandler)
 	return mux
 }
 
