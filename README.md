@@ -5,15 +5,18 @@ It supports user auth, chatroom membership, message persistence, and live event 
 
 ## Project Focus
 
-The core of this project is the **`connection` WebSocket gateway**.
-It is responsible for:
-- maintaining client WebSocket sessions,
-- running an inbound middleware pipeline (auth, rate limit, validation, routing),
-- forwarding inbound chat events to Kafka,
-- accepting fanout HTTP pushes and broadcasting to connected clients.
+This project is a multi‑service chat system with three core runtime services:
+- **`backend`**: REST APIs, auth, persistence, and business logic.
+- **`connection`**: WebSocket gateway for real‑time clients.
+- **`fanout`**: Kafka consumer that targets the right gateways via Redis.
 
-The `backend` service provides REST APIs, authentication/token issuance, and data/business logic, while `connection` handles live transport and event flow at runtime.
-The `fanout` service consumes outbound Kafka events, resolves room membership and gateway ownership via Redis, then delivers events to the appropriate gateway instances over HTTP.
+The gateway (`connection`) is the real‑time execution layer. It:
+- maintains client WebSocket sessions,
+- runs an inbound middleware pipeline (auth, rate limit, validation, routing),
+- forwards inbound chat events to Kafka,
+- accepts fanout HTTP pushes and broadcasts to connected clients.
+
+The fanout worker (`fanout`) consumes outbound Kafka events, resolves room membership and gateway ownership via Redis, then delivers events to the appropriate gateway instances over HTTP.
 
 ## Tech Stack
 
@@ -243,6 +246,14 @@ Outbound path (`Kafka -> fanout -> connection -> client`):
 2. It looks up room membership and gateway ownership in Redis.
 3. `fanout` posts to `/fanout` on the owning gateway with a targeted user list.
 4. Matching connected clients receive broadcast messages over existing WebSocket sessions.
+
+## Fanout Registry Keys
+
+The fanout worker expects Redis to keep two mappings:
+- **Room membership**: `room:{room_id}:users` is a set of user IDs in the room.
+- **User ownership**: `user:{user_id}:gateway` is a string with the gateway host:port.
+
+These key prefixes/suffixes are configurable in `fanout/configs/config.yaml`.
 
 This split lets `backend` remain focused on HTTP business APIs while `connection` scales independently for high-concurrency real-time traffic.
 

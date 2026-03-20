@@ -45,6 +45,24 @@ jobs:
         working-directory: connection
         run: go test ./...
 
+  fanout-test:
+    name: fanout tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: fanout/go.mod
+          cache: true
+          cache-dependency-path: fanout/go.mod
+
+      - name: test
+        working-directory: fanout
+        run: go test ./...
+
   frontend-build:
     name: frontend build
     runs-on: ubuntu-latest
