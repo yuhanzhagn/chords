@@ -22,7 +22,7 @@ The fanout worker (`fanout`) consumes outbound Kafka events, resolves room membe
 
 | Layer      | Technologies |
 |-----------|--------------|
-| **WS Gateway (`connection`)** | Go 1.24, [gorilla/websocket](https://github.com/gorilla/websocket), middleware pipeline, Kafka producer/consumer ([Sarama](https://github.com/IBM/sarama)), protobuf/json codecs |
+| **WS Gateway (`connection`)** | Go 1.24, [gorilla/websocket](https://github.com/gorilla/websocket), middleware pipeline, Kafka producer + HTTP fanout handler ([Sarama](https://github.com/IBM/sarama)), protobuf/json codecs |
 | **API Service (`backend`)** | Go 1.24, [Gin](https://github.com/gin-gonic/gin), [GORM](https://gorm.io), JWT issuance/validation, [Redis](https://redis.io), [Logrus](https://github.com/sirupsen/logrus), Kafka client ([Sarama](https://github.com/IBM/sarama)) |
 | **Fanout Workers (`fanout`)** | Go 1.24, Kafka consumer ([Sarama](https://github.com/IBM/sarama)), Redis registry, HTTP fanout to gateways |
 | **Frontend** | React 19, React Router, Create React App |
@@ -110,6 +110,7 @@ go run cmd/server/main.go
 
 The gateway runs at **http://localhost:8081** by default and serves WebSocket upgrades at **`/ws`**.
 Kafka settings are in `connection/configs/config.yaml`.
+It also exposes `/fanout` so fanout workers can push outbound events over HTTP instead of the gateway consuming Kafka outbound topics directly.
 
 JWT behavior in dev:
 - `backend` generates JWTs (login),
@@ -181,9 +182,6 @@ event:
 kafka:
   brokers:
     - "kafka:9092"
-  consumer_group: "connection-ws-gateway"
-  outbound_topics:
-    - "notification"
   inbound_topic: "user-request"
 ```
 

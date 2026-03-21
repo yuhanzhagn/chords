@@ -136,22 +136,6 @@ func setupHandlerChain(
 	return handler.NewHandlerChain(finalSinkHandler, rateLimitMiddleware, groupAssignmentMiddleware).Build()
 }
 
-func outboundHubEventWriter(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.SinkFunc {
-	return func(_ context.Context, event any) error {
-		msg, ok := event.(*kafkapb.KafkaEvent)
-		if !ok {
-			return fmt.Errorf("unexpected outbound event type: %T", event)
-		}
-		hub.HandleOutboundEvent(msg)
-		return nil
-	}
-}
-
-func setupOutboundHandlerChain(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
-	finalHubHandler := handler.SinkHandler(outboundHubEventWriter(hub))
-	return handler.NewHandlerChain(finalHubHandler).Build()
-}
-
 func main() {
 	cfg := mustLoadConfig("configs/config.yaml")
 
@@ -165,8 +149,6 @@ func main() {
 	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
 
 	mux := newMux(hub, inboundHandler)
-	outboundSource := mustStartOutboundSource(cfg, hub, eventCodec)
-	defer stopOutboundSource(outboundSource)
 
 	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
 		log.Fatal(err)
@@ -231,40 +213,6 @@ func newMux(
 	mux.Handle("/ws", globalConnLimiter(wsHandler))
 	mux.Handle("/fanout", fanoutHandler)
 	return mux
-}
-
-func mustStartOutboundSource(
-	cfg *app.Config,
-	hub *gateway.Hub[*kafkapb.KafkaEvent],
-	eventCodec codec.EventCodec[*kafkapb.KafkaEvent],
-) *source.KafkaSource[*kafkapb.KafkaEvent] {
-	outboundHandler := setupOutboundHandlerChain(hub)
-	outboundSource, err := source.NewKafkaSource[*kafkapb.KafkaEvent](outboundHandler, source.KafkaSourceOptions[*kafkapb.KafkaEvent]{
-		Brokers: cfg.Kafka.Brokers,
-		GroupID: cfg.Kafka.ConsumerGroup,
-		Topics:  cfg.Kafka.OutboundTopics,
-		Decoder: eventCodec,
-		OnHandleError: func(err error) {
-			log.Printf("kafka outbound source error: %v", err)
-		},
-	})
-	if err != nil {
-		log.Fatalf("failed to setup kafka outbound source: %v", err)
-	}
-
-	sourceCtx := context.Background()
-	if err := outboundSource.Start(sourceCtx); err != nil {
-		log.Fatalf("failed to start kafka outbound source: %v", err)
-	}
-	return outboundSource
-}
-
-func stopOutboundSource(outboundSource *source.KafkaSource[*kafkapb.KafkaEvent]) {
-	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := outboundSource.Stop(stopCtx); err != nil {
-		log.Printf("failed to stop outbound source: %v", err)
-	}
 }
 
 func newEventCodec(codecType string) codec.EventCodec[*kafkapb.KafkaEvent] {

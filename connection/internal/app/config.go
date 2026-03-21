@@ -15,10 +15,8 @@ type Config struct {
 		Codec string `yaml:"codec"`
 	} `yaml:"event"`
 	Kafka struct {
-		Brokers        []string `yaml:"brokers"`
-		ConsumerGroup  string   `yaml:"consumer_group"`
-		OutboundTopics []string `yaml:"outbound_topics"`
-		InboundTopic   string   `yaml:"inbound_topic"`
+		Brokers      []string `yaml:"brokers"`
+		InboundTopic string   `yaml:"inbound_topic"`
 	} `yaml:"kafka"`
 }
 
@@ -48,12 +46,6 @@ func (c *Config) withDefaults() {
 	}
 	if len(c.Kafka.Brokers) == 0 {
 		c.Kafka.Brokers = []string{"kafka:9092"}
-	}
-	if c.Kafka.ConsumerGroup == "" {
-		c.Kafka.ConsumerGroup = "connection-ws-gateway"
-	}
-	if len(c.Kafka.OutboundTopics) == 0 {
-		c.Kafka.OutboundTopics = []string{"notification"}
 	}
 	if c.Kafka.InboundTopic == "" {
 		c.Kafka.InboundTopic = "user-request"
