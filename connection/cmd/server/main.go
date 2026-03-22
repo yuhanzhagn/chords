@@ -149,6 +149,17 @@ func main() {
 	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
 
 	mux := newMux(hub, inboundHandler)
+	fanoutSource := source.NewFanoutHTTPHandler(hub, cfg.Fanout.Address)
+	if err := fanoutSource.Start(context.Background()); err != nil {
+		log.Fatalf("failed to start fanout http source: %v", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := fanoutSource.Stop(stopCtx); err != nil {
+			log.Printf("failed to stop fanout http source: %v", err)
+		}
+	}()
 
 	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
 		log.Fatal(err)
@@ -205,13 +216,11 @@ func newMux(
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	wsHandler := WsHandler(hub, inboundHandler)
-	fanoutHandler := source.NewFanoutHTTPHandler(hub)
 	globalConnLimiter := middlewares.GlobalConnectionRateLimitMiddleware(middlewares.GlobalConnectionRateLimitOptions{
 		RatePerSecond: 30,
 		Burst:         60,
 	})
 	mux.Handle("/ws", globalConnLimiter(wsHandler))
-	mux.Handle("/fanout", fanoutHandler)
 	return mux
 }
 

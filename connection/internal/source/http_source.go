@@ -1,6 +1,7 @@
 package source
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,41 +20,79 @@ type FanoutRequest struct {
 	Event   *kafkapb.KafkaEvent `json:"event"`
 }
 
-func NewFanoutHTTPHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+type FanoutHTTPSource struct {
+	hub     *gateway.Hub[*kafkapb.KafkaEvent]
+	address string
+	server  *http.Server
+}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxFanoutBodyBytes))
-		if err != nil {
-			http.Error(w, "failed to read request", http.StatusBadRequest)
-			return
-		}
-		defer func() {
-			if err := r.Body.Close(); err != nil {
-				log.Printf("[fanout-http] failed to close body: %v", err)
-			}
-		}()
+func NewFanoutHTTPHandler(hub *gateway.Hub[*kafkapb.KafkaEvent], address string) *FanoutHTTPSource {
+	return &FanoutHTTPSource{hub: hub, address: address}
+}
 
-		var req FanoutRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			http.Error(w, "invalid json", http.StatusBadRequest)
-			return
-		}
-		if req.Event == nil {
-			http.Error(w, "event is required", http.StatusBadRequest)
-			return
-		}
-		if err := applyFanout(hub, &req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+func (s *FanoutHTTPSource) Start(_ context.Context) error {
+	if s.server != nil {
+		return errors.New("fanout http source already started")
+	}
 
-		w.WriteHeader(http.StatusNoContent)
-	})
+	mux := http.NewServeMux()
+	mux.Handle("/fanout", s)
+	s.server = &http.Server{
+		Addr:    s.address,
+		Handler: mux,
+	}
+
+	go func() {
+		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("[fanout-http] server error: %v", err)
+		}
+	}()
+
+	return nil
+}
+
+func (s *FanoutHTTPSource) Stop(ctx context.Context) error {
+	if s.server == nil {
+		return nil
+	}
+	err := s.server.Shutdown(ctx)
+	s.server = nil
+	return err
+}
+
+func (s *FanoutHTTPSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxFanoutBodyBytes))
+	if err != nil {
+		http.Error(w, "failed to read request", http.StatusBadRequest)
+		return
+	}
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Printf("[fanout-http] failed to close body: %v", err)
+		}
+	}()
+
+	var req FanoutRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.Event == nil {
+		http.Error(w, "event is required", http.StatusBadRequest)
+		return
+	}
+	if err := applyFanout(s.hub, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func applyFanout(hub *gateway.Hub[*kafkapb.KafkaEvent], req *FanoutRequest) error {

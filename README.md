@@ -110,7 +110,7 @@ go run cmd/server/main.go
 
 The gateway runs at **http://localhost:8081** by default and serves WebSocket upgrades at **`/ws`**.
 Kafka settings are in `connection/configs/config.yaml`.
-It also exposes `/fanout` so fanout workers can push outbound events over HTTP instead of the gateway consuming Kafka outbound topics directly.
+It also exposes a separate HTTP server for `/fanout` so fanout workers can push outbound events over HTTP instead of the gateway consuming Kafka outbound topics directly.
 
 JWT behavior in dev:
 - `backend` generates JWTs (login),
@@ -177,6 +177,8 @@ Edit `connection/configs/config.yaml`:
 ```yaml
 server:
   address: ":8081"
+fanout:
+  address: ":8082"
 event:
   codec: "protobuf"
 kafka:

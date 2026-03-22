@@ -1,6 +1,9 @@
 server:
   address: ":8081"
 
+fanout:
+  address: ":8082"
+
 event:
   codec: "protobuf"
 

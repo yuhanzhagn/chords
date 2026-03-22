@@ -11,6 +11,9 @@ type Config struct {
 	Server struct {
 		Address string `yaml:"address"`
 	} `yaml:"server"`
+	Fanout struct {
+		Address string `yaml:"address"`
+	} `yaml:"fanout"`
 	Event struct {
 		Codec string `yaml:"codec"`
 	} `yaml:"event"`
@@ -40,6 +43,9 @@ func LoadConfig(path string) (*Config, error) {
 func (c *Config) withDefaults() {
 	if c.Server.Address == "" {
 		c.Server.Address = ":8081"
+	}
+	if c.Fanout.Address == "" {
+		c.Fanout.Address = ":8082"
 	}
 	if c.Event.Codec == "" {
 		c.Event.Codec = "protobuf"
