@@ -143,7 +143,7 @@ The app runs at **http://localhost:3000** (Create React App default). Point it t
 ### 4. Full stack with Docker
 
 ```bash
-docker compose up --build
+make demo
 ```
 
 - **Traefik** listens on host `:8000` and routes services by path.
@@ -153,6 +153,8 @@ docker compose up --build
 - **Fanout**: internal (posts to `/fanout` on gateway)
 - **Redis**: internal; exposed on `6379` for debugging if needed.
 - **Kafka**: internal; exposed on `9092`.
+
+`make demo` builds the local Go binaries (including `fanout`) and then runs `docker compose up --build`.
 
 ## Configuration
 

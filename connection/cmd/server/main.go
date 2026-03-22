@@ -48,6 +48,7 @@ func messageEventSinkWriter(
 		if !ok {
 			return fmt.Errorf("unexpected event type: %T", event)
 		}
+		log.Printf("[ws-inbound] client=%d room=%d msg_type=%s", inbound.ClientID, inbound.Event.RoomId, inbound.Event.MsgType)
 		if !hub.IsMessage(inbound.Event) {
 			return nil
 		}

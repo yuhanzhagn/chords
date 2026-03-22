@@ -77,6 +77,8 @@ const MessageList = ({ messages, loading, loadingMore, hasMore, onLoadMore }: Me
 
         {messages.map((msg) => {
           const style = getMessageClass(msg);
+          const isPending = msg.status === "pending";
+          const isFailed = msg.status === "failed";
           const isSelf = style === "self" || style === "failed";
 
           return (
@@ -87,12 +89,14 @@ const MessageList = ({ messages, loading, loadingMore, hasMore, onLoadMore }: Me
                 isSelf
                   ? "ml-auto border-primary/40 bg-primary text-primary-foreground"
                   : "border-border/70 bg-secondary/60 text-foreground",
-                style === "failed" && "border-destructive/50 bg-destructive/15 text-destructive"
+                isFailed && "border-destructive/50 bg-destructive/15 text-destructive",
+                isPending && "border-dashed border-primary/40 bg-primary/25 text-primary-foreground/90 opacity-80 shadow-none"
               )}
             >
               <div className={cn("mb-1 flex items-center justify-between text-[11px]", isSelf ? "text-primary-foreground/80" : "text-muted-foreground")}>
                 <span className="font-semibold">{msg.UserID || "Anonymous"}</span>
                 <span>
+                  {isPending && "Sending… "}
                   {msg.CreatedAt ? new Date(msg.CreatedAt).toLocaleTimeString() : ''}
                 </span>
               </div>

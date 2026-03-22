@@ -92,6 +92,7 @@ func (s *FanoutHTTPSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[fanout-http] room=%d users=%d msg_type=%s", req.Event.RoomId, len(req.UserIDs), req.Event.MsgType)
 	w.WriteHeader(http.StatusNoContent)
 }
 
