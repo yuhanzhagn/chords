@@ -17,6 +17,7 @@ The gateway (`connection`) is the real‑time execution layer. It:
 - accepts fanout HTTP pushes and broadcasts to connected clients.
 
 The fanout worker (`fanout`) consumes outbound Kafka events, resolves room membership and gateway ownership via Redis, then delivers events to the appropriate gateway instances over HTTP.
+The gateway (`connection`) updates Redis on inbound events so fanout can locate room members and gateway ownership.
 
 ## Tech Stack
 
@@ -181,12 +182,21 @@ server:
   address: ":8081"
 fanout:
   address: ":8082"
+  advertise_addr: "connection:8082"
 event:
   codec: "protobuf"
 kafka:
   brokers:
     - "kafka:9092"
   inbound_topic: "user-request"
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+  room_users_prefix: "room:"
+  room_users_suffix: ":users"
+  user_gateway_prefix: "user:"
+  user_gateway_suffix: ":gateway"
 ```
 
 ### Fanout Worker

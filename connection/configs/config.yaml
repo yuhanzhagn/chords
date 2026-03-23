@@ -3,6 +3,7 @@ server:
 
 fanout:
   address: ":8082"
+  advertise_addr: "connection:8082"
 
 event:
   codec: "protobuf"
@@ -11,3 +12,12 @@ kafka:
   brokers:
     - "kafka:9092"
   inbound_topic: "user-request"
+
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+  room_users_prefix: "room:"
+  room_users_suffix: ":users"
+  user_gateway_prefix: "user:"
+  user_gateway_suffix: ":gateway"

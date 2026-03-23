@@ -7,6 +7,7 @@ import (
 	"connection/internal/gateway"
 	"connection/internal/handler"
 	"connection/internal/handler/middlewares"
+	"connection/internal/registry"
 	"connection/internal/sink"
 	"connection/internal/source"
 	kafkapb "connection/proto/kafka"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 const devSharedJWTSecret = "dev-shared-jwt-secret"
@@ -27,6 +29,12 @@ var nextWSClientID atomic.Uint32
 type ConnectionJWTClaims struct {
 	UserID string `json:"user_id"`
 	jwt.RegisteredClaims
+}
+
+type FanoutRegistry interface {
+	AddRoomUser(ctx context.Context, roomID, userID uint32) error
+	RemoveRoomUser(ctx context.Context, roomID, userID uint32) error
+	SetUserGateway(ctx context.Context, userID uint32, addr string) error
 }
 
 func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) http.Handler {
@@ -59,11 +67,41 @@ func messageEventSinkWriter(
 	}
 }
 
-func groupAssignmentHandler(hub *gateway.Hub[*kafkapb.KafkaEvent]) handler.HandlerFunc {
+func groupAssignmentHandler(
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	reg FanoutRegistry,
+	gatewayAddr string,
+) handler.HandlerFunc {
 	return func(c *handler.Context) error {
 		inbound, ok := c.Event.(gateway.InboundEvent[*kafkapb.KafkaEvent])
 		if !ok {
 			return fmt.Errorf("unexpected event type: %T", c.Event)
+		}
+
+		if reg != nil && inbound.Event != nil {
+			ctx := c.Context
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			userID := inbound.Event.UserId
+			roomID := inbound.Event.RoomId
+			if userID != 0 {
+				if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
+					log.Printf("failed to set user gateway: %v", err)
+				}
+			}
+			if userID != 0 && roomID != 0 {
+				switch {
+				case hub.IsJoin(inbound.Event), hub.IsMessage(inbound.Event):
+					if err := reg.AddRoomUser(ctx, roomID, userID); err != nil {
+						log.Printf("failed to add room user: %v", err)
+					}
+				case hub.IsLeave(inbound.Event):
+					if err := reg.RemoveRoomUser(ctx, roomID, userID); err != nil {
+						log.Printf("failed to remove room user: %v", err)
+					}
+				}
+			}
 		}
 
 		switch {
@@ -107,8 +145,10 @@ func setupHandlerChain(
 	hub *gateway.Hub[*kafkapb.KafkaEvent],
 	multiSink sink.Sink[*kafkapb.KafkaEvent],
 	jwtMiddleware handler.Middleware,
+	reg FanoutRegistry,
+	gatewayAddr string,
 ) handler.HandlerFunc {
-	assignGroup := groupAssignmentHandler(hub)
+	assignGroup := groupAssignmentHandler(hub, reg, gatewayAddr)
 	rateLimitMiddleware := middlewares.ConnectionRateLimitMiddleware(middlewares.ConnectionRateLimitOptions{
 		RatePerSecond: 20,
 		Burst:         40,
@@ -146,8 +186,29 @@ func main() {
 	multiSink, closeSink := mustSetupMultiSink(cfg, eventCodec)
 	defer closeSink()
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.Redis.Addr,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("redis ping failed: %v", err)
+	}
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Printf("redis close failed: %v", err)
+		}
+	}()
+
+	reg := registry.NewRedisRegistry(redisClient, registry.Config{
+		RoomUsersPrefix:   cfg.Redis.RoomUsersPrefix,
+		RoomUsersSuffix:   cfg.Redis.RoomUsersSuffix,
+		UserGatewayPrefix: cfg.Redis.UserGatewayPrefix,
+		UserGatewaySuffix: cfg.Redis.UserGatewaySuffix,
+	})
+
 	jwtMiddleware := newJWTMiddleware()
-	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware)
+	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware, reg, cfg.Fanout.AdvertiseAddr)
 
 	mux := newMux(hub, inboundHandler)
 	fanoutSource := source.NewFanoutHTTPHandler(hub, cfg.Fanout.Address)

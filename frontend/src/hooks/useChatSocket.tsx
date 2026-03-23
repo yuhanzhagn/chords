@@ -8,6 +8,11 @@ export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: a
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const shouldReconnectRef = useRef(true);
+  const onMessageRef = useRef(onMessage);
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   useEffect(() => {
     if (!user || !token) return;
@@ -43,7 +48,8 @@ export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: a
         try {
           const uint8Array = new Uint8Array(e.data);
           const decodedEvent = KafkaEvent.decode(uint8Array);
-          onMessage?.(decodedEvent);
+          console.log("[ws-onmessage] event", decodedEvent);
+          onMessageRef.current?.(decodedEvent);
         } catch (err) {
           console.error("Failed to decode KafkaEvent:", err);
         }
@@ -78,7 +84,7 @@ export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: a
 
       socketRef.current = null;
     };
-  }, [user, token, onMessage]);
+  }, [user, token]);
 
   function send(payload: KafkaEvent) {
     const ws = socketRef.current;

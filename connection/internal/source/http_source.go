@@ -110,11 +110,13 @@ func applyFanout(hub *gateway.Hub[*kafkapb.KafkaEvent], req *FanoutRequest) erro
 		return errors.New("failed to encode event")
 	}
 
-	if len(req.UserIDs) == 0 {
-		hub.Broadcast(req.Event.RoomId, payload)
+	if req.RoomID != 0 {
+		hub.Broadcast(req.RoomID, payload)
 		return nil
 	}
-
+	if len(req.UserIDs) == 0 {
+		return errors.New("room_id or user_ids is required")
+	}
 	hub.SendToClients(req.UserIDs, payload)
 	return nil
 }
