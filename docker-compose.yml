@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   app:
-    build: .
+    image: golang:1.24.6-bookworm
     container_name: go-app
     depends_on:
       redis:
@@ -11,8 +11,8 @@ services:
         condition: service_healthy
     working_dir: /app
     volumes:
-      - ./backend:/app      # mount entire project folder with your binary
-    command: ./app  # run your binary inside container
+      - ./backend:/app      # mount module source for go run
+    command: ["go", "run", "./cmd/main.go"]
     networks:
       - web
     labels:
@@ -21,7 +21,7 @@ services:
       - traefik.http.routers.app.rule=PathPrefix(`/api`)
       - traefik.http.services.app.loadbalancer.server.port=8080
   connection:
-    build: .
+    image: golang:1.24.6-bookworm
     container_name: go-connection
     depends_on:
       redis:
@@ -30,8 +30,8 @@ services:
         condition: service_healthy
     working_dir: /app
     volumes:
-      - ./connection:/app      # mount entire project folder with your binary
-    command: ./connection  # run your binary inside container
+      - ./connection:/app      # mount module source for go run
+    command: ["go", "run", "./cmd/server/main.go"]
     networks:
       - web
     labels:
@@ -40,7 +40,7 @@ services:
       - traefik.http.routers.connection.rule=PathPrefix(`/ws`)
       - traefik.http.services.connection.loadbalancer.server.port=8081
   fanout:
-    build: .
+    image: golang:1.24.6-bookworm
     container_name: go-fanout
     depends_on:
       redis:
@@ -49,8 +49,8 @@ services:
         condition: service_healthy
     working_dir: /app
     volumes:
-      - ./fanout:/app      # mount entire project folder with your binary
-    command: ./fanout  # run your binary inside container
+      - ./fanout:/app      # mount module source for go run
+    command: ["go", "run", "./cmd/worker/main.go"]
     networks:
       - web
   frontend:
