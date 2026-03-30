@@ -35,6 +35,7 @@ type FanoutRegistry interface {
 	AddRoomUser(ctx context.Context, roomID, userID uint32) error
 	RemoveRoomUser(ctx context.Context, roomID, userID uint32) error
 	SetUserGateway(ctx context.Context, userID uint32, addr string) error
+	RemoveUserGateway(ctx context.Context, userID uint32) error
 }
 
 func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) http.Handler {
@@ -78,18 +79,21 @@ func groupAssignmentHandler(
 			return fmt.Errorf("unexpected event type: %T", c.Event)
 		}
 
-		if reg != nil && inbound.Event != nil {
-			ctx := c.Context
-			if ctx == nil {
-				ctx = context.Background()
+	if reg != nil && inbound.Event != nil {
+		ctx := c.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		userID := inbound.Event.UserId
+		roomID := inbound.Event.RoomId
+		if userID != 0 {
+			hub.SetClientUserID(inbound.ClientID, userID)
+		}
+		if userID != 0 {
+			if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
+				log.Printf("failed to set user gateway: %v", err)
 			}
-			userID := inbound.Event.UserId
-			roomID := inbound.Event.RoomId
-			if userID != 0 {
-				if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
-					log.Printf("failed to set user gateway: %v", err)
-				}
-			}
+		}
 			if userID != 0 && roomID != 0 {
 				switch {
 				case hub.IsJoin(inbound.Event), hub.IsMessage(inbound.Event):
@@ -206,6 +210,23 @@ func main() {
 		UserGatewayPrefix: cfg.Redis.UserGatewayPrefix,
 		UserGatewaySuffix: cfg.Redis.UserGatewaySuffix,
 	})
+
+	if reg != nil {
+		hub.SetDisconnectHandler(func(_ uint32, userID uint32, groupIDs []uint32) {
+			if userID == 0 {
+				return
+			}
+			ctx := context.Background()
+			for _, roomID := range groupIDs {
+				if err := reg.RemoveRoomUser(ctx, roomID, userID); err != nil {
+					log.Printf("failed to remove room user on disconnect: %v", err)
+				}
+			}
+			if err := reg.RemoveUserGateway(ctx, userID); err != nil {
+				log.Printf("failed to remove user gateway on disconnect: %v", err)
+			}
+		})
+	}
 
 	jwtMiddleware := newJWTMiddleware()
 	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware, reg, cfg.Fanout.AdvertiseAddr)

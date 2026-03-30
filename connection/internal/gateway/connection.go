@@ -108,7 +108,11 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 		if c.Conn.Cancel != nil {
 			c.Conn.Cancel()
 		}
-		c.Conn.Ws.Close()
+		if hub != nil {
+			userID, groupIDs := hub.RemoveClientAndGroups(c.ID)
+			hub.handleDisconnect(c.ID, userID, groupIDs)
+		}
+		c.Close()
 	}()
 
 	for {

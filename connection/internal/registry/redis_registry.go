@@ -47,6 +47,13 @@ func (r *RedisRegistry) SetUserGateway(ctx context.Context, userID uint32, addr 
 	return r.client.Set(ctx, r.userGatewayKey(userID), addr, 0).Err()
 }
 
+func (r *RedisRegistry) RemoveUserGateway(ctx context.Context, userID uint32) error {
+	if r == nil || r.client == nil {
+		return nil
+	}
+	return r.client.Del(ctx, r.userGatewayKey(userID)).Err()
+}
+
 func (r *RedisRegistry) roomUsersKey(roomID uint32) string {
 	return fmt.Sprintf("%s%d%s", r.cfg.RoomUsersPrefix, roomID, r.cfg.RoomUsersSuffix)
 }

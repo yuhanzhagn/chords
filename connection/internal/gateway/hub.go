@@ -10,6 +10,7 @@ import (
 
 type Client struct {
 	ID        uint32
+	UserID    uint32
 	Conn      *Connection
 	SendChan  chan []byte
 	wsMsgType int
@@ -55,7 +56,11 @@ type Hub[T any] struct {
 	store ConnectionStore
 	codec codec.EventCodec[T]
 	event EventRouter[T]
+
+	onDisconnect DisconnectHandler
 }
+
+type DisconnectHandler func(clientID uint32, userID uint32, groupIDs []uint32)
 
 func NewHub[T any](store ConnectionStore, eventCodec codec.EventCodec[T], router EventRouter[T]) *Hub[T] {
 	if eventCodec == nil {
@@ -85,6 +90,37 @@ func (h *Hub[T]) RemoveClient(clientID uint32) {
 
 func (h *Hub[T]) RemoveClientFromGroup(clientID uint32, groupID uint32) {
 	h.store.RemoveClientFromGroup(clientID, groupID)
+}
+
+func (h *Hub[T]) SetClientUserID(clientID uint32, userID uint32) {
+	if h == nil || userID == 0 {
+		return
+	}
+	h.store.SetClientUserID(clientID, userID)
+}
+
+func (h *Hub[T]) RemoveClientAndGroups(clientID uint32) (uint32, []uint32) {
+	if h == nil {
+		return 0, nil
+	}
+	userID := h.store.GetClientUserID(clientID)
+	groupIDs := h.store.GroupsForClient(clientID)
+	h.store.RemoveClient(clientID)
+	return userID, groupIDs
+}
+
+func (h *Hub[T]) SetDisconnectHandler(handler DisconnectHandler) {
+	if h == nil {
+		return
+	}
+	h.onDisconnect = handler
+}
+
+func (h *Hub[T]) handleDisconnect(clientID uint32, userID uint32, groupIDs []uint32) {
+	if h == nil || h.onDisconnect == nil {
+		return
+	}
+	h.onDisconnect(clientID, userID, groupIDs)
 }
 
 func (h *Hub[T]) Broadcast(groupID uint32, msg []byte) {

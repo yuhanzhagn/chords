@@ -11,6 +11,9 @@ type ConnectionStore interface {
 	RemoveClientFromGroup(clientID uint32, groupID uint32)
 
 	GetClient(clientID uint32) *Client
+	SetClientUserID(clientID uint32, userID uint32)
+	GetClientUserID(clientID uint32) uint32
+	GroupsForClient(clientID uint32) []uint32
 	GetClientsInGroup(groupID uint32) []*Client
 	GetAllClients() []*Client
 }
@@ -48,6 +51,39 @@ func (s *MemoryStore) GetClient(clientID uint32) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.clients[clientID]
+}
+
+func (s *MemoryStore) SetClientUserID(clientID uint32, userID uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.clients[clientID]; ok && c != nil {
+		c.UserID = userID
+	}
+}
+
+func (s *MemoryStore) GetClientUserID(clientID uint32) uint32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if c, ok := s.clients[clientID]; ok && c != nil {
+		return c.UserID
+	}
+	return 0
+}
+
+func (s *MemoryStore) GroupsForClient(clientID uint32) []uint32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var res []uint32
+	for roomID, room := range s.rooms {
+		if room == nil {
+			continue
+		}
+		if _, ok := room[clientID]; ok {
+			res = append(res, roomID)
+		}
+	}
+	return res
 }
 
 func (s *MemoryStore) AssignClientToGroup(clientID uint32, groupID uint32) {
