@@ -21,3 +21,6 @@ redis:
   room_users_suffix: ":users"
   user_gateway_prefix: "user:"
   user_gateway_suffix: ":gateway"
+  room_users_ttl: "2m"
+  user_gateway_ttl: "2m"
+  presence_refresh_interval: "30s"

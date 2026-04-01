@@ -92,6 +92,20 @@ func (h *Hub[T]) RemoveClientFromGroup(clientID uint32, groupID uint32) {
 	h.store.RemoveClientFromGroup(clientID, groupID)
 }
 
+func (h *Hub[T]) AllClients() []*Client {
+	if h == nil {
+		return nil
+	}
+	return h.store.GetAllClients()
+}
+
+func (h *Hub[T]) GroupsForClient(clientID uint32) []uint32 {
+	if h == nil {
+		return nil
+	}
+	return h.store.GroupsForClient(clientID)
+}
+
 func (h *Hub[T]) SetClientUserID(clientID uint32, userID uint32) {
 	if h == nil || userID == 0 {
 		return

@@ -79,21 +79,21 @@ func groupAssignmentHandler(
 			return fmt.Errorf("unexpected event type: %T", c.Event)
 		}
 
-	if reg != nil && inbound.Event != nil {
-		ctx := c.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		userID := inbound.Event.UserId
-		roomID := inbound.Event.RoomId
-		if userID != 0 {
-			hub.SetClientUserID(inbound.ClientID, userID)
-		}
-		if userID != 0 {
-			if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
-				log.Printf("failed to set user gateway: %v", err)
+		if reg != nil && inbound.Event != nil {
+			ctx := c.Context
+			if ctx == nil {
+				ctx = context.Background()
 			}
-		}
+			userID := inbound.Event.UserId
+			roomID := inbound.Event.RoomId
+			if userID != 0 {
+				hub.SetClientUserID(inbound.ClientID, userID)
+			}
+			if userID != 0 {
+				if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
+					log.Printf("failed to set user gateway: %v", err)
+				}
+			}
 			if userID != 0 && roomID != 0 {
 				switch {
 				case hub.IsJoin(inbound.Event), hub.IsMessage(inbound.Event):
@@ -209,6 +209,8 @@ func main() {
 		RoomUsersSuffix:   cfg.Redis.RoomUsersSuffix,
 		UserGatewayPrefix: cfg.Redis.UserGatewayPrefix,
 		UserGatewaySuffix: cfg.Redis.UserGatewaySuffix,
+		RoomUsersTTL:      cfg.Redis.RoomUsersTTL,
+		UserGatewayTTL:    cfg.Redis.UserGatewayTTL,
 	})
 
 	if reg != nil {
@@ -227,6 +229,7 @@ func main() {
 			}
 		})
 	}
+	startPresenceRefresher(reg, hub, cfg.Fanout.AdvertiseAddr, cfg.Redis.PresenceRefresh)
 
 	jwtMiddleware := newJWTMiddleware()
 	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware, reg, cfg.Fanout.AdvertiseAddr)
@@ -320,4 +323,42 @@ func newEventCodec(codecType string) codec.EventCodec[*kafkapb.KafkaEvent] {
 		}
 		return pbCodec
 	}
+}
+
+func startPresenceRefresher(
+	reg FanoutRegistry,
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	gatewayAddr string,
+	interval time.Duration,
+) {
+	if reg == nil || hub == nil || interval <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	go func() {
+		defer ticker.Stop()
+		for range ticker.C {
+			clients := hub.AllClients()
+			if len(clients) == 0 {
+				continue
+			}
+			ctx := context.Background()
+			for _, client := range clients {
+				if client == nil || client.UserID == 0 {
+					continue
+				}
+				userID := client.UserID
+				if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
+					log.Printf("failed to refresh user gateway: %v", err)
+				}
+				groupIDs := hub.GroupsForClient(client.ID)
+				for _, roomID := range groupIDs {
+					if err := reg.AddRoomUser(ctx, roomID, userID); err != nil {
+						log.Printf("failed to refresh room user: %v", err)
+					}
+				}
+			}
+		}
+	}()
 }

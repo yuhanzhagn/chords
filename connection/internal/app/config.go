@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,13 +24,16 @@ type Config struct {
 		InboundTopic string   `yaml:"inbound_topic"`
 	} `yaml:"kafka"`
 	Redis struct {
-		Addr              string `yaml:"addr"`
-		Password          string `yaml:"password"`
-		DB                int    `yaml:"db"`
-		RoomUsersPrefix   string `yaml:"room_users_prefix"`
-		RoomUsersSuffix   string `yaml:"room_users_suffix"`
-		UserGatewayPrefix string `yaml:"user_gateway_prefix"`
-		UserGatewaySuffix string `yaml:"user_gateway_suffix"`
+		Addr              string        `yaml:"addr"`
+		Password          string        `yaml:"password"`
+		DB                int           `yaml:"db"`
+		RoomUsersPrefix   string        `yaml:"room_users_prefix"`
+		RoomUsersSuffix   string        `yaml:"room_users_suffix"`
+		UserGatewayPrefix string        `yaml:"user_gateway_prefix"`
+		UserGatewaySuffix string        `yaml:"user_gateway_suffix"`
+		RoomUsersTTL      time.Duration `yaml:"room_users_ttl"`
+		UserGatewayTTL    time.Duration `yaml:"user_gateway_ttl"`
+		PresenceRefresh   time.Duration `yaml:"presence_refresh_interval"`
 	} `yaml:"redis"`
 }
 
@@ -83,5 +87,14 @@ func (c *Config) withDefaults() {
 	}
 	if c.Redis.UserGatewaySuffix == "" {
 		c.Redis.UserGatewaySuffix = ":gateway"
+	}
+	if c.Redis.RoomUsersTTL == 0 {
+		c.Redis.RoomUsersTTL = 2 * time.Minute
+	}
+	if c.Redis.UserGatewayTTL == 0 {
+		c.Redis.UserGatewayTTL = 2 * time.Minute
+	}
+	if c.Redis.PresenceRefresh == 0 {
+		c.Redis.PresenceRefresh = 30 * time.Second
 	}
 }

@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -12,6 +13,8 @@ type Config struct {
 	RoomUsersSuffix   string
 	UserGatewayPrefix string
 	UserGatewaySuffix string
+	RoomUsersTTL      time.Duration
+	UserGatewayTTL    time.Duration
 }
 
 type RedisRegistry struct {
@@ -27,7 +30,14 @@ func (r *RedisRegistry) AddRoomUser(ctx context.Context, roomID, userID uint32) 
 	if r == nil || r.client == nil {
 		return nil
 	}
-	return r.client.SAdd(ctx, r.roomUsersKey(roomID), userID).Err()
+	key := r.roomUsersKey(roomID)
+	if err := r.client.SAdd(ctx, key, userID).Err(); err != nil {
+		return err
+	}
+	if ttl := r.cfg.RoomUsersTTL; ttl > 0 {
+		return r.client.Expire(ctx, key, ttl).Err()
+	}
+	return nil
 }
 
 func (r *RedisRegistry) RemoveRoomUser(ctx context.Context, roomID, userID uint32) error {
@@ -44,7 +54,8 @@ func (r *RedisRegistry) SetUserGateway(ctx context.Context, userID uint32, addr 
 	if addr == "" {
 		return nil
 	}
-	return r.client.Set(ctx, r.userGatewayKey(userID), addr, 0).Err()
+	expire := r.cfg.UserGatewayTTL
+	return r.client.Set(ctx, r.userGatewayKey(userID), addr, expire).Err()
 }
 
 func (r *RedisRegistry) RemoveUserGateway(ctx context.Context, userID uint32) error {
