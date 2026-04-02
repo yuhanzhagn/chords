@@ -86,6 +86,26 @@ func (c *NotificationConsumer) Start(ctx context.Context) {
 	handler := &notificationHandler{handle: c.handler}
 
 	go func() {
+		if c == nil || c.consumer == nil {
+			return
+		}
+		errCh := c.consumer.Errors()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err, ok := <-errCh:
+				if !ok {
+					return
+				}
+				if err != nil {
+					log.Printf("[fanout-kafka] consumer error: %v", err)
+				}
+			}
+		}
+	}()
+
+	go func() {
 		for {
 			if err := c.consumer.Consume(ctx, c.topics, handler); err != nil {
 				if errors.Is(err, context.Canceled) {
