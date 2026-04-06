@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"connection/internal/gateway"
 	kafkapb "connection/proto/kafka"
@@ -38,8 +39,12 @@ func (s *FanoutHTTPSource) Start(_ context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/fanout", s)
 	s.server = &http.Server{
-		Addr:    s.address,
-		Handler: mux,
+		Addr:              s.address,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

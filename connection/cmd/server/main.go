@@ -247,7 +247,15 @@ func main() {
 		}
 	}()
 
-	if err := http.ListenAndServe(cfg.Server.Address, mux); err != nil {
+	server := &http.Server{
+		Addr:              cfg.Server.Address,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
