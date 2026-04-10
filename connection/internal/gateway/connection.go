@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"context"
 	"connection/internal/handler"
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -16,6 +16,13 @@ var upgrader = websocket.Upgrader{
 		return true // allow all origins, adjust for production
 	},
 }
+
+var (
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	maxMessageSize = int64(1 << 20)
+)
 
 // subscribe, message
 type WSMessage struct {
@@ -37,6 +44,9 @@ type WSConn interface {
 	WriteMessage(int, []byte) error
 	Close() error
 	SetWriteDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetReadLimit(limit int64)
+	SetPongHandler(h func(string) error)
 }
 
 type Connection struct {
@@ -115,6 +125,14 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 		c.Close()
 	}()
 
+	c.Conn.Ws.SetReadLimit(maxMessageSize)
+	if err := c.Conn.Ws.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		log.Printf("set read deadline error: %v", err)
+	}
+	c.Conn.Ws.SetPongHandler(func(string) error {
+		return c.Conn.Ws.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
 	for {
 		_, raw, err := c.Conn.Ws.ReadMessage()
 		if err != nil {
@@ -145,13 +163,31 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 }
 
 func writePump(c *Client) {
-	for msg := range c.SendChan {
-		c.Conn.Ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		err := c.Conn.Ws.WriteMessage(c.wsMsgType, msg)
-		if err != nil {
-			log.Println("write error:", err)
-			break
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case msg, ok := <-c.SendChan:
+			if !ok {
+				return
+			}
+			if err := c.Conn.Ws.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				log.Printf("set write deadline error: %v", err)
+			}
+			if err := c.Conn.Ws.WriteMessage(c.wsMsgType, msg); err != nil {
+				log.Println("write error:", err)
+				return
+			}
+			log.Printf("Broadcasting to a chatroom")
+		case <-ticker.C:
+			if err := c.Conn.Ws.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				log.Printf("set write deadline error: %v", err)
+			}
+			if err := c.Conn.Ws.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Println("ping error:", err)
+				return
+			}
 		}
-		log.Printf("Broadcasting to a chatroom")
 	}
 }
