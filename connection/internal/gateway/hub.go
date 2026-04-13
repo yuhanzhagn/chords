@@ -4,6 +4,7 @@ import (
 	"connection/internal/event/codec"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	gws "github.com/gorilla/websocket"
 )
@@ -15,12 +16,14 @@ type Client struct {
 	SendChan  chan []byte
 	wsMsgType int
 	closeOnce sync.Once
+	closed    atomic.Bool
 }
 
 func (c *Client) Close() {
 	if c == nil {
 		return
 	}
+	c.closed.Store(true)
 	c.closeOnce.Do(func() {
 		if c.SendChan != nil {
 			close(c.SendChan)
@@ -158,6 +161,16 @@ func (h *Hub[T]) sendToClient(client *Client, msg []byte, groupID uint32) {
 	if client == nil {
 		return
 	}
+	if client.closed.Load() || client.SendChan == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("dropping closed client: client_id=%d", client.ID)
+			h.RemoveClient(client.ID)
+			client.Close()
+		}
+	}()
 	select {
 	case client.SendChan <- msg:
 	default:
