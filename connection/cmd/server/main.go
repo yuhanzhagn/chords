@@ -213,22 +213,7 @@ func main() {
 		UserGatewayTTL:    cfg.Redis.UserGatewayTTL,
 	})
 
-	if reg != nil {
-		hub.SetDisconnectHandler(func(_ uint32, userID uint32, groupIDs []uint32) {
-			if userID == 0 {
-				return
-			}
-			ctx := context.Background()
-			for _, roomID := range groupIDs {
-				if err := reg.RemoveRoomUser(ctx, roomID, userID); err != nil {
-					log.Printf("failed to remove room user on disconnect: %v", err)
-				}
-			}
-			if err := reg.RemoveUserGateway(ctx, userID); err != nil {
-				log.Printf("failed to remove user gateway on disconnect: %v", err)
-			}
-		})
-	}
+	hub.SetDisconnectHandler(newDisconnectHandler(hub, reg))
 	startPresenceRefresher(reg, hub, cfg.Fanout.AdvertiseAddr, cfg.Redis.PresenceRefresh)
 
 	jwtMiddleware := newJWTMiddleware()
@@ -369,4 +354,32 @@ func startPresenceRefresher(
 			}
 		}
 	}()
+}
+
+func newDisconnectHandler(
+	hub *gateway.Hub[*kafkapb.KafkaEvent],
+	reg FanoutRegistry,
+) gateway.DisconnectHandler {
+	return func(_ uint32, userID uint32, groupIDs []uint32) {
+		if hub == nil || reg == nil || userID == 0 {
+			return
+		}
+
+		ctx := context.Background()
+		for _, roomID := range groupIDs {
+			if roomID == 0 || hub.UserInGroup(userID, roomID) {
+				continue
+			}
+			if err := reg.RemoveRoomUser(ctx, roomID, userID); err != nil {
+				log.Printf("failed to remove room user on disconnect: %v", err)
+			}
+		}
+
+		if hub.HasClientForUser(userID) {
+			return
+		}
+		if err := reg.RemoveUserGateway(ctx, userID); err != nil {
+			log.Printf("failed to remove user gateway on disconnect: %v", err)
+		}
+	}
 }

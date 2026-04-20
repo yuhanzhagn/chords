@@ -109,6 +109,30 @@ func (h *Hub[T]) GroupsForClient(clientID uint32) []uint32 {
 	return h.store.GroupsForClient(clientID)
 }
 
+func (h *Hub[T]) HasClientForUser(userID uint32) bool {
+	if h == nil || userID == 0 {
+		return false
+	}
+	for _, client := range h.store.GetAllClients() {
+		if client != nil && client.UserID == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Hub[T]) UserInGroup(userID uint32, groupID uint32) bool {
+	if h == nil || userID == 0 || groupID == 0 {
+		return false
+	}
+	for _, client := range h.store.GetClientsInGroup(groupID) {
+		if client != nil && client.UserID == userID {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Hub[T]) SetClientUserID(clientID uint32, userID uint32) {
 	if h == nil || userID == 0 {
 		return
