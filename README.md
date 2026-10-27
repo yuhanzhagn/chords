@@ -1,317 +1,59 @@
 # Chords
 
-Chords is a real-time chat system built as a multi-service Go application with a React frontend.  
-It supports user auth, chatroom membership, message persistence, and live event delivery.
+实时聊天室 monorepo：三个独立 Go 模块（REST backend、WebSocket connection、fanout worker）、React 前端，以及独立 Python TF-IDF 检索服务。
 
-## Project Focus
+支持注册/登录、聊天室成员关系、消息持久化、历史分页与实时分发。当前处于开发阶段；认证接线、投递可靠性与部署完整性仍有缺口，见 [现状与待办](docs/status.md)。
 
-This project is a multi‑service chat system with three core runtime services:
-- **`backend`**: REST APIs, auth, persistence, and business logic.
-- **`connection`**: WebSocket gateway for real‑time clients.
-- **`fanout`**: Kafka consumer that targets the right gateways via Redis.
+## 开始阅读
 
-The gateway (`connection`) is the real‑time execution layer. It:
-- maintains client WebSocket sessions,
-- runs an inbound middleware pipeline (auth, rate limit, validation, routing),
-- forwards inbound chat events to Kafka,
-- accepts fanout HTTP pushes and broadcasts to connected clients.
+| 目的 | 文档 |
+| --- | --- |
+| Agent 接手任务 | [AGENTS.md](AGENTS.md)，再读目标目录指南 |
+| 理解系统 | [架构](docs/architecture.md)、[协议](docs/contracts.md) |
+| 安装与运行 | [开发运行](docs/development.md)、[配置](docs/configuration.md) |
+| 验证与协作 | [测试](docs/testing.md)、[贡献](CONTRIBUTING.md)、[Agent 流程](docs/agent-workflow.md) |
+| 浏览全部文档 | [文档索引](docs/README.md) |
 
-The fanout worker (`fanout`) consumes outbound Kafka events, resolves room membership and gateway ownership via Redis, then delivers events to the appropriate gateway instances over HTTP.
-The gateway (`connection`) updates Redis on inbound events so fanout can locate room members and gateway ownership.
+## 仓库地图
 
-## Tech Stack
+| 目录 | 职责与入口 |
+| --- | --- |
+| [backend](backend/AGENTS.md) | Go / Gin / GORM；REST、JWT/session、SQLite、Kafka 处理；`cmd/main.go` |
+| [connection](connection/AGENTS.md) | Go / gorilla/websocket；连接、订阅、在线注册、pipeline；`cmd/server/main.go` |
+| [fanout](fanout/AGENTS.md) | Go / Sarama；消费 notification、查询 Redis、HTTP 推送；`cmd/worker/main.go` |
+| [frontend](frontend/AGENTS.md) | React 19 / TypeScript / CRA；`src/App.tsx` |
+| [proto](proto/AGENTS.md) | 共享 `kafka/event.proto` 与生成约定 |
+| [python_ai_service](python_ai_service/README.md) | 独立 FastAPI / TF-IDF 检索与抽取式回答；`app/main.py` |
+| [deploy](deploy/AGENTS.md) | kind/Kubernetes 开发实验，仅 backend、connection、Redis、Kafka |
 
-| Layer      | Technologies |
-|-----------|--------------|
-| **WS Gateway (`connection`)** | Go 1.24, [gorilla/websocket](https://github.com/gorilla/websocket), middleware pipeline, Kafka producer + HTTP fanout handler ([Sarama](https://github.com/IBM/sarama)), protobuf/json codecs |
-| **API Service (`backend`)** | Go 1.24, [Gin](https://github.com/gin-gonic/gin), [GORM](https://gorm.io), JWT issuance/validation, [Redis](https://redis.io), [Logrus](https://github.com/sirupsen/logrus), Kafka client ([Sarama](https://github.com/IBM/sarama)) |
-| **Fanout Workers (`fanout`)** | Go 1.24, Kafka consumer ([Sarama](https://github.com/IBM/sarama)), Redis registry, HTTP fanout to gateways |
-| **Frontend** | React 19, React Router, Create React App |
-| **Data** | SQLite (GORM), Redis (cache/sessions), Kafka (event bus) |
-| **Deploy** | Docker, Docker Compose, Traefik (reverse proxy) |
+实时消息主路径：`browser → connection → Kafka(user-request) → backend → Kafka(notification) → fanout → connection → browser`。REST 创建消息当前只写数据库。
 
-## Project Structure
+## 快速检查
 
-```
-gochatroom/
-├── backend/                 # Go API service (REST + business logic)
-│   ├── cmd/main.go          # Entry point
-│   ├── configs/config.yaml  # App/database config
-│   ├── internal/
-│   │   ├── app/             # DB & config
-│   │   ├── cache/           # In-memory & Redis cache
-│   │   ├── controller/      # HTTP handlers
-│   │   ├── middleware/      # JWT auth, logger, load shedding
-│   │   ├── model/           # GORM models
-│   │   ├── repo/            # Data access
-│   │   ├── routes/          # Route setup
-│   │   ├── service/         # Business logic
-│   │   └── ...
-│   └── test/                # Integration tests
-├── connection/              # WebSocket gateway service
-│   ├── cmd/server/main.go   # Gateway entry point
-│   ├── configs/config.yaml  # Gateway config (server/event/kafka)
-│   ├── internal/
-│   │   ├── gateway/         # Hub/connection transport logic
-│   │   ├── handler/         # Event middleware pipeline abstractions
-│   │   ├── event/codec/     # Event codec implementations
-│   │   ├── platform/kafka/  # Kafka producer/consumer
-│   │   └── service/         # Message service
-│   └── proto/               # Gateway protobuf messages
-├── fanout/                  # Fanout worker service
-│   ├── cmd/worker/main.go   # Worker entry point
-│   ├── configs/config.yaml  # Worker config (kafka/redis/fanout)
-│   ├── internal/
-│   │   ├── fanout/          # HTTP dispatch to gateways
-│   │   ├── kafka/           # Kafka consumer
-│   │   └── registry/        # Redis registry lookups
-│   └── proto/               # Kafka protobuf messages
-├── frontend/                # React SPA
-│   ├── src/
-│   │   ├── components/      # Login, register, chatroom, messages, etc.
-│   │   └── ...
-│   └── package.json
-├── docker-compose.yml       # App, frontend, Redis, Traefik
-└── Dockerfile               # Backend image
-```
-
-## Prerequisites
-
-- **Go** 1.24+ (for backend + connection)
-- **Go** 1.24+ (for fanout worker)
-- **Node.js** 18+ and npm (for frontend)
-- **Redis** (required by backend)
-- **Kafka** (required by backend/connection event flow)
-- **Docker** & **Docker Compose** (optional, for full stack)
-
-## Quick Start
-
-### 1. Backend (local)
+需要 GNU Make、Go（推荐预装 1.24.12，精确要求见各 `go.mod`）、Node/npm 和 Python 3。前端 CI 声明 Node 18。
 
 ```bash
-cd backend
-go mod download
-go run cmd/main.go
+make help
+make check-docs
+make test-go
+make install-frontend       # npm ci --legacy-peer-deps
+make test-frontend
+make build-frontend
+make check-python
 ```
 
-The API runs at **http://localhost:8080**. It expects:
+根目录没有 `go.mod`，不能在这里直接 `go test ./...`。Python 检查仅验证语法，服务依赖与启动见独立 README。
 
-- **Redis** at `redis:6379` (Docker network) or `localhost:6379` (local).  
-  For local dev without Docker, start Redis (e.g. `redis-server`) and change `backend/internal/redisdb/redis.go` to use `Addr: "localhost:6379"` if needed.
+## 完整开发演示
 
-- **SQLite** DB file `mydb.sqlite` in `backend/` (created automatically via config).
-
-### 2. Connection Gateway (local)
-
-```bash
-cd connection
-go mod download
-go run cmd/server/main.go
-```
-
-The gateway runs at **http://localhost:8081** by default and serves WebSocket upgrades at **`/ws`**.
-Kafka settings are in `connection/configs/config.yaml`.
-It also exposes a separate HTTP server for `/fanout` so fanout workers can push outbound events over HTTP instead of the gateway consuming Kafka outbound topics directly.
-
-JWT behavior in dev:
-- `backend` generates JWTs (login),
-- `connection` validates JWTs on WebSocket requests,
-- both use the same hardcoded key: `dev-shared-jwt-secret`.
-
-### 3. Fanout Worker (local)
-
-```bash
-cd fanout
-go mod download
-go run cmd/worker/main.go
-```
-
-The worker consumes outbound Kafka topics and posts fanout payloads to the gateway's `/fanout` endpoint.
-Redis key conventions used by the worker:
-- `room:{room_id}:users` set of user IDs in the room
-- `user:{user_id}:gateway` gateway address hosting that user
-
-### 3. Frontend (local)
-
-```bash
-cd frontend
-npm install
-npm start
-```
-
-The app runs at **http://localhost:3000** (Create React App default). Point it to the backend API via env (for example `REACT_APP_URL=http://localhost:8080/api`).
-
-### 4. Full stack with Docker
+**仅使用隔离开发环境：backend 每次启动都会清空连接到的 Redis DB。**
 
 ```bash
 make demo
 ```
 
-- **Traefik** listens on host `:8000` and routes services by path.
-- **Frontend**: `/`
-- **API**: `/api`
-- **WS Gateway**: `/ws`
-- **Fanout**: internal (posts to `/fanout` on gateway)
-- **Redis**: internal; exposed on `6379` for debugging if needed.
-- **Kafka**: internal; exposed on `9092`.
+该目标构建 Linux Go 二进制、安装/构建前端，再以前台方式启动 Docker Compose。需要 Docker Engine、Compose 和 Linux 构建环境。
 
-`make demo` builds the local Go binaries (including `fanout`) and then runs `docker compose up --build`.
+浏览器入口为 [localhost:8000](http://localhost:8000)；Traefik 转发 `/api`、`/ws` 和 `/`。gateway `/fanout` 在容器内部监听 8082。Redis/Kafka 映射宿主机 6379/9092，但 Kafka 广播地址仍为 `kafka:9092`。
 
-## Configuration
-
-### Backend
-
-Edit `backend/configs/config.yaml`:
-
-```yaml
-app:
-  port: 8080
-frontend:
-  port: 8081
-database:
-  dialect: sqlite
-  dsn: mydb.sqlite
-```
-
-### Connection Gateway
-
-Edit `connection/configs/config.yaml`:
-
-```yaml
-server:
-  address: ":8081"
-fanout:
-  address: ":8082"
-  advertise_addr: "connection:8082"
-event:
-  codec: "protobuf"
-kafka:
-  brokers:
-    - "kafka:9092"
-  inbound_topic: "user-request"
-redis:
-  addr: "redis:6379"
-  password: ""
-  db: 0
-  room_users_prefix: "room:"
-  room_users_suffix: ":users"
-  user_gateway_prefix: "user:"
-  user_gateway_suffix: ":gateway"
-```
-
-### Fanout Worker
-
-Edit `fanout/configs/config.yaml`:
-
-```yaml
-kafka:
-  brokers:
-    - "kafka:9092"
-  consumer_group: "fanout-workers"
-  topics:
-    - "notification"
-
-redis:
-  addr: "redis:6379"
-  password: ""
-  db: 0
-  room_users_prefix: "room:"
-  room_users_suffix: ":users"
-  user_gateway_prefix: "user:"
-  user_gateway_suffix: ":gateway"
-
-fanout:
-  gateway_path: "/fanout"
-  request_timeout: 3s
-```
-
-### Redis
-
-Backend connects to Redis in `backend/internal/redisdb/redis.go` (`Addr`, `Password`, `DB`). Use `redis:6379` when running in Docker, `localhost:6379` when running backend on the host.
-
-## API Overview
-
-All API routes are under `/api`. Auth uses JWT; send `Authorization: Bearer <token>` for protected routes.
-In the current dev setup, the JWT is issued by `backend` and validated by both `backend` and `connection` with the same hardcoded key (`dev-shared-jwt-secret`).
-
-| Area | Endpoints |
-|------|-----------|
-| **Auth** | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
-| **Users** | `POST /api/users`, `GET /api/users` (auth) |
-| **Chatrooms** | `POST/GET/DELETE /api/chatrooms`, `GET /api/chatrooms/:id`, `GET /api/chatrooms/search` (auth) |
-| **Memberships** | `POST /api/memberships/add-user`, `GET /api/memberships/:username/chatrooms` (auth) |
-| **Messages** | `POST /api/messages`, `GET /api/chatrooms/:id/messages`, `DELETE /api/messages/:id` (auth) |
-| **WebSocket Gateway** | `GET /ws` (upgrade to WebSocket via the connection service) |
-| **Fanout Ingress** | `POST /fanout` (internal, used by fanout workers) |
-
-## Connection Gateway Architecture
-
-The `connection` service is the real-time execution layer of the system.
-
-Inbound path (`client -> connection -> Kafka`):
-1. Client sends a WebSocket event.
-2. `connection` runs middleware chain (JWT auth, rate limiting, event filtering/routing).
-3. Message events are encoded and published to Kafka inbound topic.
-
-Outbound path (`Kafka -> fanout -> connection -> client`):
-1. `fanout` consumes outbound Kafka topics.
-2. It looks up room membership and gateway ownership in Redis.
-3. `fanout` posts to `/fanout` on the owning gateway with a targeted user list.
-4. Matching connected clients receive broadcast messages over existing WebSocket sessions.
-
-## Fanout Registry Keys
-
-The fanout worker expects Redis to keep two mappings:
-- **Room membership**: `room:{room_id}:users` is a set of user IDs in the room.
-- **User ownership**: `user:{user_id}:gateway` is a string with the gateway host:port.
-
-These key prefixes/suffixes are configurable in `fanout/configs/config.yaml`.
-
-This split lets `backend` remain focused on HTTP business APIs while `connection` scales independently for high-concurrency real-time traffic.
-
-## Future Development Aims
-
-The next stage focuses on production readiness of the `connection` gateway and platform operations:
-
-1. Move deployment from Docker Compose to Kubernetes
-- replace local Compose-first topology with k8s manifests/Helm-style deployment,
-- separate stateless gateway replicas from stateful dependencies (Kafka/Redis/DB),
-- standardize config/secrets/health probes for cluster-native operations.
-
-2. Add fallback behavior for dependency failures
-- define clear fallback paths when Kafka or Redis is unavailable,
-- apply buffering/retry/circuit-breaking policies to avoid full request-path failure,
-- keep connection service behavior predictable during partial outages.
-
-3. Improve graceful degradation and graceful shutdown
-- support controlled draining of WebSocket sessions during rollout/termination,
-- stop accepting new upgrades before process exit,
-- flush/close sinks and consumers safely to reduce message loss risk.
-
-4. Make horizontal scaling easier in Kubernetes
-- keep `connection` stateless per pod and externalize shared state/events,
-- strengthen partition/group routing patterns for multi-replica fan-out,
-- tune autoscaling signals (connection count, queue lag, CPU/memory) for real-time traffic.
-
-## Testing
-
-**Backend**
-
-```bash
-cd backend
-go test ./...
-```
-
-**Connection**
-
-```bash
-cd connection
-go test ./...
-```
-
-**Frontend**
-
-```bash
-cd frontend
-npm test
-```
+Compose 未包含 Python 服务；kind 清单尚未覆盖完整聊天链路。详细步骤与排障见 [开发运行](docs/development.md)，本次实际验证记录见 [测试说明](docs/testing.md)。

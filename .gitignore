@@ -98,3 +98,9 @@ temp/
 connection/connection
 .README_JA.md
 README_JA.md
+
+# Python local environment, bytecode and search data
+.venv/
+__pycache__/
+*.py[cod]
+python_ai_service/data/

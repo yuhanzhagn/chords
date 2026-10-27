@@ -57,14 +57,14 @@ jobs:
         with:
           go-version-file: fanout/go.mod
           cache: true
-          cache-dependency-path: fanout/go.mod
+          cache-dependency-path: fanout/go.sum
 
       - name: test
         working-directory: fanout
         run: go test ./...
 
   frontend-build:
-    name: frontend build
+    name: frontend tests and build
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -81,6 +81,25 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps
 
+      - name: test
+        working-directory: frontend
+        run: CI=true npm test -- --watchAll=false --runInBand
+
       - name: build
         working-directory: frontend
         run: npm run build
+
+  docs-check:
+    name: documentation and Python syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: check local documentation links and Python syntax
+        run: make check-docs check-python

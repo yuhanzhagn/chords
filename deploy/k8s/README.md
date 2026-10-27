@@ -2,6 +2,20 @@
 
 This setup runs `backend`, `connection`, `redis`, and single-node `kafka` in kind.
 
+**Scope:** these manifests are an incomplete development topology. They do not
+include fanout, frontend or the Python service, and the connection Service does
+not expose its internal fanout port 8082. The steps below validate API/WS ingress,
+not the complete real-time message round trip. Backend startup also flushes its
+Redis DB; use an isolated development cluster. There are no persistent volumes
+for SQLite, Redis or Kafka in these manifests.
+
+See the [deployment agent guide](../AGENTS.md), [architecture](../../docs/architecture.md)
+and [known gaps](../../docs/status.md). Offline validation from the repo root:
+
+```bash
+kubectl kustomize deploy/k8s/base
+```
+
 ## Prerequisites
 
 - kind

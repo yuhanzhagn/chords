@@ -66,7 +66,7 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - PORT=8000
       - REACT_APP_URL=localhost:8000/api 
-    command: sh -c "npm install && npm start"
+    command: sh -c "npm ci --legacy-peer-deps && npm start"
     networks:
       - web
 #    depends_on:
