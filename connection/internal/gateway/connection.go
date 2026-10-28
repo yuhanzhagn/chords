@@ -3,6 +3,7 @@ package gateway
 import (
 	"connection/internal/handler"
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -24,14 +25,16 @@ var (
 	maxMessageSize = int64(1 << 20)
 )
 
-// subscribe, message
-type WSMessage struct {
-	MsgType string `json:"MsgType"`
-	UserID  uint32 `json:"UserID"`
-	RoomID  uint32 `json:"RoomID"`
-	Message string `json:"Message"`
-	TempID  string `json:"TempID"`
+var ErrPolicyViolation = errors.New("connection authorization rejected")
+var ErrAuthUnavailable = errors.New("authentication service unavailable")
+
+type AuthenticatedSession struct {
+	UserID            uint32
+	Handler           handler.HandlerFunc
+	AuthorizeDelivery func(uint32) error
+	ValidateSession   func() error
 }
+type Authenticator func(context.Context, []byte) (AuthenticatedSession, error)
 
 // InboundEvent wraps a decoded event with transport metadata.
 type InboundEvent[T any] struct {
@@ -84,6 +87,7 @@ func ServeWs[T any](
 	r *http.Request,
 	hub *Hub[T],
 	inboundHandler handler.HandlerFunc,
+	authenticate ...Authenticator,
 ) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -91,6 +95,33 @@ func ServeWs[T any](
 		return
 	}
 
+	var session AuthenticatedSession
+	if len(authenticate) > 0 {
+		ws.SetReadLimit(4096)
+		_ = ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+		kind, raw, readErr := ws.ReadMessage()
+		if readErr == nil && kind == websocket.TextMessage {
+			session, err = authenticate[0](r.Context(), raw)
+		} else {
+			err = ErrPolicyViolation
+		}
+		if err != nil || session.UserID == 0 || session.Handler == nil {
+			code := websocket.ClosePolicyViolation
+			if errors.Is(err, ErrAuthUnavailable) {
+				code = websocket.CloseTryAgainLater
+			}
+			_ = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, "authentication unavailable or rejected"), time.Now().Add(writeWait))
+			_ = ws.Close()
+			return
+		}
+		inboundHandler = session.Handler
+		_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
+		ready, _ := json.Marshal(map[string]string{"type": "ready"})
+		if err = ws.WriteMessage(websocket.TextMessage, ready); err != nil {
+			_ = ws.Close()
+			return
+		}
+	}
 	conn, err := NewConnection(ws, inboundHandler, r)
 	if err != nil {
 		log.Println("connection setup error:", err)
@@ -99,10 +130,13 @@ func ServeWs[T any](
 	}
 
 	client := &Client{
-		ID:        userID,
-		Conn:      conn,
-		SendChan:  make(chan []byte, 256),
-		wsMsgType: hub.WSMessageType(),
+		ID:                userID,
+		UserID:            session.UserID,
+		AuthorizeDelivery: session.AuthorizeDelivery,
+		ValidateSession:   session.ValidateSession,
+		Conn:              conn,
+		SendChan:          make(chan []byte, 256),
+		wsMsgType:         hub.WSMessageType(),
 	}
 
 	// 1. 注册 client（全局唯一真相）
@@ -138,7 +172,6 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 		if err != nil {
 			return
 		}
-		log.Printf("%x\n", raw)
 
 		event, err := hub.Codec().Decode(raw)
 		if err != nil {
@@ -156,7 +189,11 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 			},
 		})
 		if err != nil {
-			log.Println("inbound handler error:", err)
+			log.Println("inbound handler rejected event")
+			if errors.Is(err, ErrPolicyViolation) || errors.Is(err, ErrAuthUnavailable) {
+				c.reject(err)
+				return
+			}
 		}
 	}
 
@@ -164,6 +201,8 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 
 func writePump(c *Client) {
 	ticker := time.NewTicker(pingPeriod)
+	authTicker := time.NewTicker(5 * time.Second)
+	defer authTicker.Stop()
 	defer ticker.Stop()
 
 	for {
@@ -180,6 +219,14 @@ func writePump(c *Client) {
 				return
 			}
 			log.Printf("Broadcasting to a chatroom")
+		case <-authTicker.C:
+			if c.ValidateSession != nil {
+				if err := c.ValidateSession(); err != nil {
+					c.reject(err)
+					c.Close()
+					return
+				}
+			}
 		case <-ticker.C:
 			if err := c.Conn.Ws.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
 				log.Printf("set write deadline error: %v", err)
@@ -188,6 +235,21 @@ func writePump(c *Client) {
 				log.Println("ping error:", err)
 				return
 			}
+		}
+	}
+}
+
+// Gorilla permits control writes concurrently with its single data writer.
+func (c *Client) reject(err error) {
+	code := websocket.ClosePolicyViolation
+	if errors.Is(err, ErrAuthUnavailable) {
+		code = websocket.CloseTryAgainLater
+	}
+	if c != nil && c.Conn != nil {
+		if ws, ok := c.Conn.Ws.(interface {
+			WriteControl(int, []byte, time.Time) error
+		}); ok {
+			_ = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, "authorization unavailable or rejected"), time.Now().Add(writeWait))
 		}
 	}
 }

@@ -47,7 +47,7 @@ func main() {
 	)
 
 	flag.StringVar(&wsURL, "url", "ws://localhost:8000/ws", "WebSocket endpoint")
-	flag.IntVar(&users, "users", 200, "number of concurrent users")
+	flag.IntVar(&users, "users", 200, "number of concurrent connections for CHORDS_WS_TOKEN")
 	flag.UintVar(&roomID, "room", 1, "chat room id")
 	flag.IntVar(&messagesEach, "messages", 3, "messages sent per user")
 	flag.DurationVar(&sendJitter, "send-jitter", 100*time.Millisecond, "max random delay before each send")
@@ -65,6 +65,11 @@ func main() {
 		log.Fatal("room must be > 0")
 	}
 
+	token := os.Getenv("CHORDS_WS_TOKEN")
+	if token == "" {
+		log.Fatal("CHORDS_WS_TOKEN is required; use a test account that joined the room")
+	}
+
 	log.Printf("wsload starting: users=%d room=%d messages/user=%d url=%s", users, roomID, messagesEach, wsURL)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -73,7 +78,7 @@ func main() {
 	start := time.Now()
 	st := &stats{}
 
-	clients := connectClients(ctx, wsURL, users, st)
+	clients := connectClients(ctx, wsURL, users, token, st)
 	if len(clients) == 0 {
 		log.Fatal("no clients connected")
 	}
@@ -86,7 +91,7 @@ func main() {
 	}
 
 	for i := range clients {
-		if err := sendEvent(clients[i].conn, newEvent(clients[i].id, uint32(roomID), "join", nil)); err != nil {
+		if err := sendEvent(clients[i].conn, newEvent(0, uint32(roomID), "join", nil)); err != nil {
 			st.sendFail.Add(1)
 			log.Printf("join send failed user=%d err=%v", clients[i].id, err)
 			continue
@@ -102,7 +107,7 @@ func main() {
 				time.Sleep(time.Duration(rand.Int63n(sendJitter.Nanoseconds() + 1)))
 			}
 			payload := []byte(fmt.Sprintf("u%d message %d", clients[i].id, msgIdx+1))
-			if err := sendEvent(clients[i].conn, newEvent(clients[i].id, uint32(roomID), "message", payload)); err != nil {
+			if err := sendEvent(clients[i].conn, newEvent(0, uint32(roomID), "message", payload)); err != nil {
 				st.sendFail.Add(1)
 				continue
 			}
@@ -113,7 +118,7 @@ func main() {
 	time.Sleep(settleWait)
 
 	for i := range clients {
-		if err := sendEvent(clients[i].conn, newEvent(clients[i].id, uint32(roomID), "leave", nil)); err != nil {
+		if err := sendEvent(clients[i].conn, newEvent(0, uint32(roomID), "leave", nil)); err != nil {
 			st.sendFail.Add(1)
 		} else {
 			st.sent.Add(1)
@@ -132,7 +137,7 @@ func main() {
 	log.Printf("events_received=%d recv_decode_fail=%d", st.received.Load(), st.recvDecode.Load())
 }
 
-func connectClients(ctx context.Context, wsURL string, users int, st *stats) []simClient {
+func connectClients(ctx context.Context, wsURL string, users int, token string, st *stats) []simClient {
 	clients := make([]simClient, 0, users)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -156,6 +161,21 @@ func connectClients(ctx context.Context, wsURL string, users int, st *stats) []s
 				st.connectFail.Add(1)
 				return
 			}
+
+			_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
+			err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
+			var ready struct {
+				Type string `json:"type"`
+			}
+			if err == nil {
+				err = conn.ReadJSON(&ready)
+			}
+			if err != nil || ready.Type != "ready" {
+				st.connectFail.Add(1)
+				_ = conn.Close()
+				return
+			}
+			_ = conn.SetReadDeadline(time.Time{})
 			st.connected.Add(1)
 
 			mu.Lock()

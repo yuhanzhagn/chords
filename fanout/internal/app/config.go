@@ -1,7 +1,7 @@
 package app
 
 import (
-	"fmt"
+	"fanout/internal/fanoutauth"
 	"os"
 	"time"
 
@@ -24,6 +24,7 @@ type Config struct {
 		UserGatewaySuffix string `yaml:"user_gateway_suffix"`
 	} `yaml:"redis"`
 	Fanout struct {
+		Token          string        `yaml:"-"`
 		GatewayPath    string        `yaml:"gateway_path"`
 		RequestTimeout time.Duration `yaml:"request_timeout"`
 	} `yaml:"fanout"`
@@ -41,7 +42,11 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	cfg.withDefaults()
-	fmt.Printf("Fanout config: %+v\n", cfg)
+	cfg.Fanout.Token = os.Getenv("FANOUT_TOKEN")
+	if err := fanoutauth.Validate(cfg.Fanout.Token); err != nil {
+		return nil, err
+	}
+	// Do not log configuration: it contains service credentials and Redis passwords.
 	return &cfg, nil
 }
 

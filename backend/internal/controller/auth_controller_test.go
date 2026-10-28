@@ -79,14 +79,6 @@ func TestAuthController_Login_Success(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	mockService.
-		On("GetUserIDByUsername", "john").
-		Return(uint(1), nil)
-
-	mockService.
-		On("ForceLogoutAll", uint(1)).
-		Return(nil)
-
-	mockService.
 		On("Login", "john", "secret").
 		Return(uint(1), "token", "jti", "sessionID", nil)
 
@@ -117,14 +109,6 @@ func TestAuthController_Login_Unauthorized(t *testing.T) {
 		"password": "wrong",
 	}
 	jsonBody, _ := json.Marshal(body)
-
-	mockService.
-		On("GetUserIDByUsername", "john").
-		Return(uint(1), nil)
-
-	mockService.
-		On("ForceLogoutAll", uint(1)).
-		Return(nil)
 
 	mockService.
 		On("Login", "john", "wrong").

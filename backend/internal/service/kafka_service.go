@@ -1,6 +1,8 @@
 package service
 
 import (
+	"backend/internal/identity"
+	"backend/utils"
 	"log"
 	"time"
 
@@ -24,42 +26,30 @@ type KafkaService struct {
 	MessageService MessageService
 }
 
-func (s *KafkaService) HandleOutboundEvent(event *kafkapb.KafkaEvent) {
-	// Here you can add logic like logging or basic validation
-	log.Printf("Handling outbound event: UserID=%d, RoomID=%d, MsgType=%s", event.UserId, event.RoomId, event.MsgType)
-	switch event.MsgType {
-	case "message":
-		s.handleChatMessage(event)
-	case "join":
-		s.handleJoin(event)
-	case "leave":
-		s.handleLeave(event)
-	default:
-		// Unknown event type
+func (s *KafkaService) HandleOutboundEvent(event *kafkapb.KafkaEvent, commandToken string) {
+	if event == nil || event.MsgType != "message" {
+		return
 	}
+	claims, err := utils.ParseCommand(commandToken)
+	if err != nil {
+		log.Println("rejected unauthorized command")
+		return
+	}
+	raw, err := proto.Marshal(event)
+	if err != nil || claims.UserID != uint(event.UserId) || claims.RoomID != uint(event.RoomId) || claims.Digest != utils.EventDigest(raw) {
+		log.Println("rejected altered command")
+		return
+	}
+	p := identity.New(claims.UserID, claims.Username, claims.SessionID)
+	s.handleChatMessage(p, event)
 }
 
-func (s *KafkaService) handleChatMessage(event *kafkapb.KafkaEvent) {
-	// Process chat message event
-	// For example, you might want to log it or transform it before publishing
-	//
-	_, err := s.MessageService.CreateMessage(uint(event.UserId), uint(event.RoomId), string(event.Content))
+func (s *KafkaService) handleChatMessage(p identity.Principal, event *kafkapb.KafkaEvent) {
+	_, err := s.MessageService.CreateMessage(p, uint(event.UserId), uint(event.RoomId), string(event.Content))
 	if err != nil {
 		log.Println("Error creating message:", err)
+		return
 	}
-
-	s.HandleOutgoingMessage(event)
-}
-
-func (s *KafkaService) handleJoin(event *kafkapb.KafkaEvent) {
-	// Process room join event
-	// For example, you might want to log it or transform it before publishing
-	s.HandleOutgoingMessage(event)
-}
-
-func (s *KafkaService) handleLeave(event *kafkapb.KafkaEvent) {
-	// Process room leave event
-	// For example, you might want to log it or transform it before publishing
 
 	s.HandleOutgoingMessage(event)
 }

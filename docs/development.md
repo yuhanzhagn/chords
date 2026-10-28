@@ -20,7 +20,7 @@ make check-python
 
 ## Compose 完整开发拓扑
 
-**backend 入口会 FLUSHDB，务必使用隔离开发 Redis。** 命令从根目录执行：
+backend 正常启动不清 Redis。先在本地设置 `JWT_SECRET`（至少 32 字节；例如 `export JWT_SECRET="$(openssl rand -hex 32)"`，不要提交或打印真实值），同时独立设置 `FANOUT_TOKEN`（至少 32 字节、无空格的可见 ASCII；例如单独运行 `openssl rand -hex 32` 生成，不能复用 JWT_SECRET）。gateway/worker 使用相同值，Compose 只向这两者注入；缺失配置在真实依赖前失败。跨不可信网络需可信 TLS，开发 HTTP 不防窃听/重放。再从根目录执行：
 
 ```bash
 make demo
@@ -60,7 +60,7 @@ go mod download
 go run ./cmd/worker
 ```
 
-默认配置要求 kafka/redis 服务名可以解析。gateway/worker 可修改 YAML 的地址及 advertise_addr；backend 的 Redis/Kafka 仍在 Go 中硬编码，不能只改 backend YAML。宿主机调试需匹配 DNS 与 Kafka advertised listener，或先实现可配置地址；通常优先采用 Compose。不要把此限制误诊为 Go 编译失败。
+默认配置要求 kafka/redis 服务名可以解析。gateway/worker 可修改 YAML 的地址及 advertise_addr；gateway 的 auth.backend_url 也必须指向可达 backend（可设 CHORDS_AUTH_BACKEND_URL）；backend 的 Redis/Kafka 仍在 Go 中硬编码，不能只改 backend YAML。宿主机调试需匹配 DNS 与 Kafka advertised listener，或先实现可配置地址；通常优先采用 Compose。不要把此限制误诊为 Go 编译失败。
 
 前端可在独立终端本地运行：
 
@@ -84,7 +84,7 @@ cd connection
 go run ./cmd/wsload -url ws://localhost:8000/ws -users 2 -room 1 -messages 1
 ```
 
-只对隔离测试环境使用。工具不会注册账户/创建房间，也没有可靠性断言；统计不能代替端到端测试。
+运行前从已加入目标房间的测试账号取得 access token，并在本地设置 `CHORDS_WS_TOKEN`（不通过 URL/命令参数传递）。`-users` 目前表示该账号的并发连接数，事件身份由服务端补全。只对隔离测试环境使用；工具不会注册账户/创建房间，也没有可靠性断言；统计不能代替端到端测试。
 
 ## 常见故障
 
@@ -93,9 +93,10 @@ go run ./cmd/wsload -url ws://localhost:8000/ws -users 2 -room 1 -messages 1
 | 根目录 go test 提示无 module | 改用 make test-go 或进入具体模块 |
 | 工具链下载/代理失败 | 各模块 go.mod、GOTOOLCHAIN、预装版本和本地缓存 |
 | Redis/Kafka 无法解析 | 服务名是 Docker 网络地址；核对 host/container 网络和 advertised listener |
-| JWT 登录成功但 WS 无法按预期鉴权 | WS 认证尚未接线，前端没传 token；不是 REST JWT 已保证 WS |
+| JWT 登录成功但 WS 无法按预期鉴权 | 检查 JSON auth/ready、backend session/成员关系、auth.backend_url 与 JWT_SECRET；本次升级后旧 token 必须重新登录 |
 | fetch URL 出现双 http:// | REACT_APP_URL 应不带协议；查所有直接 fetch |
 | WS 连上但收不到消息 | 按 gateway join/group → Redis → user-request → backend → notification → fanout → /fanout → UI 逐跳查日志 |
+| gateway/worker 启动提示 FANOUT_TOKEN 或 /fanout 返回 401 | 两端独立注入同一专用凭据，不将其放在 YAML/URL/前端；检查 Secret 引用与长度/字符，不能用用户 token 替代 |
 | pending/其他用户消息或重连异常 | useMessages CONFIRM、useChatSocket 重入逻辑，见状态待办 |
 | Jest 缺 protobuf 模块 | 先按 lock 执行 npm ci --legacy-peer-deps，排除陈旧 node_modules |
 | kind API 可用但实时不回流 | 清单缺 fanout 与 8082 Service，当前不是完整拓扑 |

@@ -1,6 +1,7 @@
 package middleware_controller
 
 import (
+	"backend/internal/identity"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -54,7 +55,7 @@ func TestMeesageCreate(t *testing.T) {
 	jsonBody, _ := json.Marshal(msg)
 
 	mockService.
-		On("CreateMessage", uint(1), uint(1), "Schizophrenia is taking me home").
+		On("CreateMessage", mock.Anything, uint(1), uint(1), "Schizophrenia is taking me home").
 		Once().
 		Return((*model.Message)(nil), errors.New("DB error"))
 
@@ -71,7 +72,7 @@ func TestMeesageCreate(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-		On("CreateMessage", uint(1), uint(1), "Schizophrenia is taking me home").
+		On("CreateMessage", mock.Anything, uint(1), uint(1), "Schizophrenia is taking me home").
 		Once().
 		Return(&model.Message{ID: 1, Content: "Schizophrenia is taking me home", UserID: 1, RoomID: 1}, nil)
 
@@ -103,7 +104,7 @@ func TestGetMessageByChatRoom(t *testing.T) {
 
 	//fail
 	mockService.
-		On("GetMessagesByChatRoom", uint(1)).
+		On("GetMessagesByChatRoom", mock.Anything, uint(1)).
 		Once().
 		Return([]model.Message{}, errors.New("DB error"))
 
@@ -120,7 +121,7 @@ func TestGetMessageByChatRoom(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-		On("GetMessagesByChatRoom", uint(1)).
+		On("GetMessagesByChatRoom", mock.Anything, uint(1)).
 		Once().
 		Return([]model.Message{model.Message{Content: "Where is my mind"}}, nil)
 
@@ -152,7 +153,7 @@ func TestMessageDelete(t *testing.T) {
 
 	//fail
 	mockService.
-		On("DeleteMessage", uint(1)).
+		On("DeleteMessage", mock.Anything, uint(1)).
 		Once().
 		Return(errors.New("DB error"))
 
@@ -169,7 +170,7 @@ func TestMessageDelete(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-		On("DeleteMessage", uint(1)).
+		On("DeleteMessage", mock.Anything, uint(1)).
 		Once().
 		Return(nil)
 
@@ -187,30 +188,30 @@ type MockMessageService struct {
 	mock.Mock
 }
 
-func (m *MockMessageService) CreateMessage(userID, roomID uint, content string) (*model.Message, error) {
-	args := m.Called(userID, roomID, content)
+func (m *MockMessageService) CreateMessage(p identity.Principal, userID, roomID uint, content string) (*model.Message, error) {
+	args := m.Called(p, userID, roomID, content)
 	if msg := args.Get(0); msg != nil {
 		return msg.(*model.Message), args.Error(1)
 	}
 	return nil, args.Error(1)
 }
 
-func (m *MockMessageService) GetMessagesByChatRoom(chatRoomID uint) ([]model.Message, error) {
-	args := m.Called(chatRoomID)
+func (m *MockMessageService) GetMessagesByChatRoom(p identity.Principal, chatRoomID uint) ([]model.Message, error) {
+	args := m.Called(p, chatRoomID)
 	return args.Get(0).([]model.Message), args.Error(1)
 }
 
-func (m *MockMessageService) DeleteMessage(id uint) error {
-	args := m.Called(id)
+func (m *MockMessageService) DeleteMessage(p identity.Principal, id uint) error {
+	args := m.Called(p, id)
 	return args.Error(0)
 }
 
-func (m *MockMessageService) GetMessagesWithLimit(roomID uint, limit int) ([]model.Message, error) {
-	args := m.Called(roomID, limit)
+func (m *MockMessageService) GetMessagesWithLimit(p identity.Principal, roomID uint, limit int) ([]model.Message, error) {
+	args := m.Called(p, roomID, limit)
 	return args.Get(0).([]model.Message), args.Error(1)
 }
 
-func (m *MockMessageService) GetMessagesPage(roomID uint, beforeID uint, limit int) ([]model.Message, error) {
-	args := m.Called(roomID, beforeID, limit)
+func (m *MockMessageService) GetMessagesPage(p identity.Principal, roomID uint, beforeID uint, limit int) ([]model.Message, error) {
+	args := m.Called(p, roomID, beforeID, limit)
 	return args.Get(0).([]model.Message), args.Error(1)
 }

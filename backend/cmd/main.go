@@ -11,9 +11,13 @@ import (
 	"backend/internal/app"
 	"backend/internal/redisdb"
 	"backend/internal/routes"
+	"backend/utils"
 )
 
 func main() {
+	if err := utils.ValidateJWTConfig(); err != nil {
+		log.Fatal(err)
+	}
 	// 1. Connect to SQLite with GORM
 	db, err := app.InitializeDBAll()
 	if err != nil {
@@ -24,12 +28,12 @@ func main() {
 
 	redisCtx := context.Background()
 	rds, err := redisdb.InitRedis(redisCtx)
-	redisdb.ClearRedis(rds)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
+	defer rds.Close()
 	r := routes.SetupRouter(db, rds)
 
 	// 6. Start the server

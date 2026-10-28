@@ -19,6 +19,7 @@ import (
 
 	"backend/internal/cache"
 	"backend/internal/controller"
+	"backend/internal/identity"
 	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/internal/service"
@@ -50,6 +51,13 @@ func setupMembershipRoute(r *gin.Engine) {
 	}
 
 	repos := repo.NewRepoContainer(db)
+	if err := db.Create(&model.UserSession{UserID: user.ID, SessionID: "session", ExpiresAt: time.Now().Add(time.Hour)}).Error; err != nil {
+		panic(err)
+	}
+	r.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(identity.WithContext(c.Request.Context(), identity.New(user.ID, user.Username, "session")))
+		c.Next()
+	})
 	typedCache := cache.NewTypedCache[[]model.ChatRoom](10*time.Minute, 15*time.Minute)
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
 

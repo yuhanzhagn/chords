@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -39,16 +40,39 @@ func TestParseJWT_ExpiredToken(t *testing.T) {
 		Username:  "bob",
 		SessionID: "sess456",
 		RegisteredClaims: jwt.RegisteredClaims{
+			Audience:  jwt.ClaimStrings{"chords-access"},
 			ExpiresAt: jwt.NewNumericDate(exp),
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
 			ID:        "jti123",
 		},
 	}
 	tokenObj := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token, err := tokenObj.SignedString(secret)
+	token, err := tokenObj.SignedString(signingKey())
 	require.NoError(t, err)
 
 	_, err = ParseJWT(token)
 	require.Error(t, err)
-	//require.True(t, parsedClaims.ExpiresAt.Time.Before(time.Now()))
+	require.True(t, errors.Is(err, jwt.ErrTokenExpired))
+}
+
+func TestJWTRequiresRuntimeKey(t *testing.T) {
+	t.Setenv("JWT_SECRET", "")
+	_, _, _, err := GenerateJWT("alice", "session")
+	require.Error(t, err)
+	_, err = SignCommand(CommandClaims{})
+	require.Error(t, err)
+}
+func TestJWTRejectsWrongAlgorithmAndMissingExpiry(t *testing.T) {
+	for _, method := range []jwt.SigningMethod{jwt.SigningMethodHS256, jwt.SigningMethodHS512} {
+		claims := Claims{Username: "alice", SessionID: "session", RegisteredClaims: jwt.RegisteredClaims{Audience: jwt.ClaimStrings{"chords-access"}}}
+		raw, err := jwt.NewWithClaims(method, claims).SignedString(signingKey())
+		require.NoError(t, err)
+		_, err = ParseJWT(raw)
+		require.Error(t, err)
+	}
+	claims := CommandClaims{RegisteredClaims: jwt.RegisteredClaims{Audience: jwt.ClaimStrings{"chords-command"}, ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Minute))}}
+	raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(signingKey())
+	require.NoError(t, err)
+	_, err = ParseCommand(raw)
+	require.Error(t, err)
 }

@@ -58,9 +58,14 @@ func (s *EventSink[T]) Write(ctx context.Context, event T) error {
 		return err
 	}
 
+	var headers []sarama.RecordHeader
+	if token := commandToken(ctx); token != "" {
+		headers = append(headers, sarama.RecordHeader{Key: []byte("chords-command"), Value: []byte(token)})
+	}
 	_, _, err = s.producer.SendMessage(&sarama.ProducerMessage{
-		Topic: s.topic,
-		Value: sarama.ByteEncoder(payload),
+		Headers: headers,
+		Topic:   s.topic,
+		Value:   sarama.ByteEncoder(payload),
 	})
 	return err
 }

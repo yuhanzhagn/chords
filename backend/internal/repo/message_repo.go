@@ -7,6 +7,8 @@ import (
 
 // MessageRepo defines persistence for messages.
 type MessageRepo interface {
+	GetByID(id uint) (*model.Message, error)
+	DeleteOwned(id, userID uint) (int64, error)
 	Create(msg *model.Message) error
 	GetByRoomID(roomID uint) ([]model.Message, error)
 	GetByRoomIDWithLimit(roomID uint, limit int) ([]model.Message, error)
@@ -59,5 +61,15 @@ func (r *messageRepo) GetByRoomIDBeforeWithLimit(roomID uint, beforeID uint, lim
 
 func (r *messageRepo) Delete(id uint) (int64, error) {
 	res := r.db.Delete(&model.Message{}, id)
+	return res.RowsAffected, res.Error
+}
+
+func (r *messageRepo) GetByID(id uint) (*model.Message, error) {
+	var m model.Message
+	err := r.db.First(&m, id).Error
+	return &m, err
+}
+func (r *messageRepo) DeleteOwned(id, userID uint) (int64, error) {
+	res := r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Message{})
 	return res.RowsAffected, res.Error
 }

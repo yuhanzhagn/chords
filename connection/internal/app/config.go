@@ -1,7 +1,9 @@
 package app
 
 import (
+	"connection/internal/fanoutauth"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -9,10 +11,14 @@ import (
 )
 
 type Config struct {
+	Auth struct {
+		BackendURL string `yaml:"backend_url"`
+	} `yaml:"auth"`
 	Server struct {
 		Address string `yaml:"address"`
 	} `yaml:"server"`
 	Fanout struct {
+		Token         string `yaml:"-"`
 		Address       string `yaml:"address"`
 		AdvertiseAddr string `yaml:"advertise_addr"`
 	} `yaml:"fanout"`
@@ -49,12 +55,26 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	cfg.withDefaults()
+	cfg.Fanout.Token = os.Getenv("FANOUT_TOKEN")
+	if err := fanoutauth.Validate(cfg.Fanout.Token); err != nil {
+		return nil, err
+	}
+	if backendURL := os.Getenv("CHORDS_AUTH_BACKEND_URL"); backendURL != "" {
+		cfg.Auth.BackendURL = backendURL
+	}
+	endpoint, err := url.Parse(cfg.Auth.BackendURL)
+	if err != nil || endpoint.Host == "" || endpoint.User != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return nil, fmt.Errorf("invalid auth.backend_url")
+	}
 
-	fmt.Printf("Connection config: %+v\n", cfg)
+	// Do not log configuration: it contains service credentials and Redis passwords.
 	return &cfg, nil
 }
 
 func (c *Config) withDefaults() {
+	if c.Auth.BackendURL == "" {
+		c.Auth.BackendURL = "http://app:8080"
+	}
 	if c.Server.Address == "" {
 		c.Server.Address = ":8081"
 	}

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"connection/internal/fanoutauth"
 	"context"
 	"encoding/json"
 	"errors"
@@ -25,10 +26,14 @@ type FanoutHTTPSource struct {
 	hub     *gateway.Hub[*kafkapb.KafkaEvent]
 	address string
 	server  *http.Server
+	token   string
 }
 
-func NewFanoutHTTPHandler(hub *gateway.Hub[*kafkapb.KafkaEvent], address string) *FanoutHTTPSource {
-	return &FanoutHTTPSource{hub: hub, address: address}
+func NewFanoutHTTPHandler(hub *gateway.Hub[*kafkapb.KafkaEvent], address, token string) (*FanoutHTTPSource, error) {
+	if err := fanoutauth.Validate(token); err != nil {
+		return nil, err
+	}
+	return &FanoutHTTPSource{hub: hub, address: address, token: token}, nil
 }
 
 func (s *FanoutHTTPSource) Start(_ context.Context) error {
@@ -66,6 +71,10 @@ func (s *FanoutHTTPSource) Stop(ctx context.Context) error {
 }
 
 func (s *FanoutHTTPSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if fanoutauth.Validate(s.token) != nil || len(r.Header.Values(fanoutauth.Header)) != 1 || !fanoutauth.Matches(r.Header.Get(fanoutauth.Header), s.token) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

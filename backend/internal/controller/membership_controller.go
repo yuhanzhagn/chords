@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"backend/internal/identity"
 	"backend/internal/service"
 	"net/http"
 
@@ -24,13 +25,13 @@ type UserChatroom struct {
 func (c *MembershipController) AddUser(ctx *gin.Context) {
 	var req UserChatroom
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(serviceStatus(err, http.StatusBadRequest), gin.H{"error": err.Error()})
 		return
 	}
 
-	err := c.membershipService.AddUserToChatRoom(req.Username, req.ChatRoomID)
+	err := c.membershipService.AddUserToChatRoom(identity.FromContext(ctx.Request.Context()), req.Username, req.ChatRoomID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(serviceStatus(err, http.StatusBadRequest), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -43,9 +44,9 @@ func (c *MembershipController) AddUser(ctx *gin.Context) {
 
 func (c *MembershipController) GetUserChatRooms(ctx *gin.Context, username string) {
 
-	rooms, err := c.membershipService.GetUserSubscribedChatRooms(username)
+	rooms, err := c.membershipService.GetUserSubscribedChatRooms(identity.FromContext(ctx.Request.Context()), username)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.JSON(serviceStatus(err, http.StatusInternalServerError), gin.H{"error": err.Error()})
 		return
 	}
 

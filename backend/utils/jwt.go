@@ -2,14 +2,21 @@
 package utils
 
 import (
+	"crypto/rand"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const devSharedJWTSecret = "dev-shared-jwt-secret"
-
-var secret = []byte(devSharedJWTSecret)
+func ValidateJWTConfig() error {
+	if len(os.Getenv("JWT_SECRET")) < 32 {
+		return fmt.Errorf("JWT_SECRET must contain at least 32 bytes")
+	}
+	return nil
+}
+func signingKey() []byte { return []byte(os.Getenv("JWT_SECRET")) }
 
 type Claims struct {
 	Username  string `json:"Username"`
@@ -18,6 +25,9 @@ type Claims struct {
 }
 
 func GenerateJWT(username string, sessionID string) (token string, jti string, exp time.Time, err error) {
+	if err = ValidateJWTConfig(); err != nil {
+		return
+	}
 	exp = time.Now().Add(1 * time.Hour)
 	jti = generateJTI()
 
@@ -25,6 +35,7 @@ func GenerateJWT(username string, sessionID string) (token string, jti string, e
 		Username:  username,
 		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Audience:  jwt.ClaimStrings{"chords-access"},
 			ExpiresAt: jwt.NewNumericDate(exp),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ID:        jti,
@@ -32,14 +43,17 @@ func GenerateJWT(username string, sessionID string) (token string, jti string, e
 	}
 
 	tokenObj := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token, err = tokenObj.SignedString(secret)
+	token, err = tokenObj.SignedString(signingKey())
 	return
 }
 
 func ParseJWT(tokenStr string) (*Claims, error) {
 	tok, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		return secret, nil
-	})
+		if err := ValidateJWTConfig(); err != nil {
+			return nil, err
+		}
+		return signingKey(), nil
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithAudience("chords-access"), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, err
 	}
@@ -48,5 +62,5 @@ func ParseJWT(tokenStr string) (*Claims, error) {
 }
 
 func generateJTI() string {
-	return jwt.NewNumericDate(time.Now()).String()
+	return rand.Text()
 }

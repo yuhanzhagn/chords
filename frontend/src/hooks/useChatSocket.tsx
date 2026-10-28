@@ -1,123 +1,102 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createSocket } from "../services/socket";
 import { UserInfo } from "../types/user";
 import { KafkaEvent } from "../proto/kafka/event";
 
 export function useChatSocket(user?: UserInfo, token?: string, onMessage?: (p: any) => void) {
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const shouldReconnectRef = useRef(true);
+  const readyRef = useRef(false);
+  const roomRef = useRef<number | null>(null);
   const onMessageRef = useRef(onMessage);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    onMessageRef.current = onMessage;
-  }, [onMessage]);
+  useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
 
   useEffect(() => {
     if (!user || !token) return;
-
-    shouldReconnectRef.current = true;
-
+    let stopped = false;
+    let attempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let authTimer: ReturnType<typeof setTimeout> | undefined;
     const scheduleReconnect = () => {
-      if (!shouldReconnectRef.current || reconnectTimerRef.current) return;
-
-      reconnectAttemptsRef.current += 1;
-      const baseDelayMs = 500;
-      const maxDelayMs = 30_000;
-      const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** (reconnectAttemptsRef.current - 1));
-      const jittered = backoff * (0.5 + Math.random());
-
-      reconnectTimerRef.current = setTimeout(() => {
-        reconnectTimerRef.current = null;
-        connect();
-      }, jittered);
+      if (stopped || reconnectTimer) return;
+      const delay = Math.min(30_000, 500 * 2 ** attempts++) * (0.5 + Math.random());
+      reconnectTimer = setTimeout(() => { reconnectTimer = undefined; connect(); }, delay);
     };
-
     const connect = () => {
-      if (!shouldReconnectRef.current) return;
+      if (stopped) return;
+      readyRef.current = false;
       const socket = createSocket();
       socketRef.current = socket;
-
+      authTimer = setTimeout(() => socket.close(), 10_000);
       socket.onopen = () => {
-        reconnectAttemptsRef.current = 0;
-        console.log("WebSocket connection established");
+        if (!stopped && socketRef.current === socket) socket.send(JSON.stringify({ type: "auth", token }));
       };
-
-      socket.onmessage = (e) => {
-        try {
-          const uint8Array = new Uint8Array(e.data);
-          const decodedEvent = KafkaEvent.decode(uint8Array);
-          console.log("[ws-onmessage] event", decodedEvent);
-          onMessageRef.current?.(decodedEvent);
-        } catch (err) {
-          console.error("Failed to decode KafkaEvent:", err);
+      socket.onmessage = (event) => {
+        if (stopped || socketRef.current !== socket) return;
+        if (typeof event.data === "string") {
+          try {
+            if (JSON.parse(event.data).type === "ready") {
+              clearTimeout(authTimer);
+              readyRef.current = true;
+              attempts = 0;
+              setError(null);
+              if (roomRef.current !== null) socket.send(KafkaEvent.encode(roomEvent("join", roomRef.current, user.id)).finish());
+            }
+          } catch { setError("Invalid connection response."); socket.close(); }
+          return;
+        }
+        if (!readyRef.current) return;
+        try { onMessageRef.current?.(KafkaEvent.decode(new Uint8Array(event.data))); }
+        catch { setError("Unable to read a chat message."); }
+      };
+      socket.onclose = (event) => {
+        if (stopped || socketRef.current !== socket) return;
+        clearTimeout(authTimer);
+        readyRef.current = false;
+        if (event.code === 1008) {
+          stopped = true;
+          setError("Session expired or room access denied. Sign in again or choose a room you joined.");
+        } else {
+          if (!stopped) setError("Connection lost. Reconnecting…");
+          scheduleReconnect();
         }
       };
-
-      socket.onclose = () => {
-        scheduleReconnect();
-      };
-
-      socket.onerror = () => {
-        scheduleReconnect();
-      };
+      socket.onerror = () => { if (stopped || socketRef.current !== socket) return; setError("Unable to connect to chat."); socket.close(); };
     };
-
     connect();
-    console.log(user.username, token);
     return () => {
-      shouldReconnectRef.current = false;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-
-      const current = socketRef.current;
-      if (
-        current &&
-        (current.readyState === WebSocket.OPEN ||
-          current.readyState === WebSocket.CONNECTING)
-      ) {
-        current.close();
-      }
-
+      stopped = true;
+      clearTimeout(reconnectTimer);
+      clearTimeout(authTimer);
+      readyRef.current = false;
+      socketRef.current?.close();
       socketRef.current = null;
+      roomRef.current = null;
     };
   }, [user, token]);
 
   function send(payload: KafkaEvent) {
     const ws = socketRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!readyRef.current || !ws || ws.readyState !== WebSocket.OPEN) {
+      setError("Chat connection is not ready. Try again shortly.");
+      return false;
+    }
     ws.send(KafkaEvent.encode(payload).finish());
+    return true;
   }
-
   function join(roomID: number, userID: string | number) {
-    const id = (BigInt(userID) * 10_000_000_000_000n + BigInt(Date.now())).toString();
-
-    send({
-      id: id,
-      msgType: "join",
-      roomId: roomID,
-      userId: Number(userID),
-      tempId: id,
-      content: new Uint8Array(0),
-      createdAt: String(Date.now()),
-    });
+    roomRef.current = roomID;
+    if (readyRef.current) send(roomEvent("join", roomID, userID));
   }
-
   function leave(roomID: number, userID: string | number) {
-    const id = (BigInt(userID) * 10_000_000_000_000n + BigInt(Date.now())).toString();
-    send({
-      id: id,
-      msgType: "leave",
-      roomId: roomID,
-      userId: Number(userID),
-      tempId: id,
-      content: new Uint8Array(0),
-      createdAt: String(Date.now()),
-    });
+    roomRef.current = null;
+    if (readyRef.current) send(roomEvent("leave", roomID, userID));
   }
+  return { send, join, leave, socketRef, error };
+}
 
-  return { send, join, leave, socketRef };
+function roomEvent(msgType: string, roomId: number, userID: string | number): KafkaEvent {
+  const id = (BigInt(userID) * 10_000_000_000_000n + BigInt(Date.now())).toString();
+  return { id, msgType, roomId, userId: Number(userID), tempId: id, content: new Uint8Array(0), createdAt: String(Date.now()) };
 }

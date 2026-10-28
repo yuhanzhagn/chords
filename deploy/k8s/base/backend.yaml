@@ -19,6 +19,12 @@ spec:
         - name: backend
           image: gochatroom/backend:kind
           imagePullPolicy: IfNotPresent
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chords-auth
+                  key: JWT_SECRET
           ports:
             - name: http
               containerPort: 8080

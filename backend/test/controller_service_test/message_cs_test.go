@@ -18,6 +18,8 @@ import (
 	//    "gorm.io/gorm"
 
 	"backend/internal/controller"
+	"backend/internal/identity"
+	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/internal/service"
 	//	"backend/internal/cache"
@@ -31,6 +33,19 @@ import (
 func setupMessageRoute(r *gin.Engine) {
 	db := setupTestDB()
 	repos := repo.NewRepoContainer(db)
+	if err := db.Create(&model.ChatRoom{ID: 1, Name: "General"}).Error; err != nil {
+		panic(err)
+	}
+	if err := db.Create(&model.UserChatRoom{UserID: 1, ChatRoomID: 1}).Error; err != nil {
+		panic(err)
+	}
+	if err := db.Create(&model.UserSession{UserID: 1, SessionID: "session", ExpiresAt: time.Now().Add(time.Hour)}).Error; err != nil {
+		panic(err)
+	}
+	r.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(identity.WithContext(c.Request.Context(), identity.New(1, "alice", "session")))
+		c.Next()
+	})
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
 
 	messageService := service.NewMessageService(repos)

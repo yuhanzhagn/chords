@@ -10,13 +10,15 @@ import (
 )
 
 type Client struct {
-	ID        uint32
-	UserID    uint32
-	Conn      *Connection
-	SendChan  chan []byte
-	wsMsgType int
-	closeOnce sync.Once
-	closed    atomic.Bool
+	ID                uint32
+	UserID            uint32
+	AuthorizeDelivery func(uint32) error
+	ValidateSession   func() error
+	Conn              *Connection
+	SendChan          chan []byte
+	wsMsgType         int
+	closeOnce         sync.Once
+	closed            atomic.Bool
 }
 
 func (c *Client) Close() {
@@ -133,13 +135,6 @@ func (h *Hub[T]) UserInGroup(userID uint32, groupID uint32) bool {
 	return false
 }
 
-func (h *Hub[T]) SetClientUserID(clientID uint32, userID uint32) {
-	if h == nil || userID == 0 {
-		return
-	}
-	h.store.SetClientUserID(clientID, userID)
-}
-
 func (h *Hub[T]) RemoveClientAndGroups(clientID uint32) (uint32, []uint32) {
 	if h == nil {
 		return 0, nil
@@ -184,6 +179,13 @@ func (h *Hub[T]) SendToClients(clientIDs []uint32, msg []byte) {
 func (h *Hub[T]) sendToClient(client *Client, msg []byte, groupID uint32) {
 	if client == nil {
 		return
+	}
+	if client.AuthorizeDelivery != nil {
+		if err := client.AuthorizeDelivery(groupID); err != nil {
+			client.reject(err)
+			client.Close()
+			return
+		}
 	}
 	if client.closed.Load() || client.SendChan == nil {
 		return

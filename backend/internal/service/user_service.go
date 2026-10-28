@@ -2,11 +2,15 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"backend/internal/model"
 	"backend/internal/repo"
+	"backend/utils"
 	"gorm.io/gorm"
 )
+
+var ErrInvalidPassword = errors.New("invalid password")
 
 type userService struct {
 	repos *repo.RepoContainer
@@ -23,13 +27,31 @@ type UserService interface {
 }
 
 func (s *userService) CreateUser(user *model.User) error {
+	return createUser(s.repos, user)
+}
+
+// createUser accepts plaintext credentials; persistence is the only layer accepting hashes.
+func createUser(repos *repo.RepoContainer, user *model.User) error {
 	if user == nil {
 		return errors.New("user cannot be nil")
 	}
 	if user.Username == "" {
 		return errors.New("user name is required")
 	}
-	return s.repos.User.Create(user)
+	if user.Password == "" {
+		return errors.New("password is required")
+	}
+	hash, err := utils.HashPassword(user.Password)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidPassword, err)
+	}
+	// Copy only writable fields, including for service callers.
+	created := model.User{Username: user.Username, Email: user.Email, Password: hash}
+	if err := repos.User.Create(&created); err != nil {
+		return err
+	}
+	*user = created
+	return nil
 }
 
 func (s *userService) GetAllUsers() ([]model.User, error) {

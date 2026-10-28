@@ -17,6 +17,7 @@ import (
 	//   "gorm.io/driver/sqlite"
 	//    "gorm.io/gorm"
 
+	"backend/internal/dto"
 	"backend/internal/model"
 	//    "backend/internal/service"
 	"backend/internal/controller"
@@ -32,7 +33,7 @@ func setupAuthMiddleware(t *testing.T) gin.HandlerFunc {
 	mockService := new(MockAuthService)
 	mockService.
 		On("ValidateJWT", "correct").
-		Return(new(model.User), new(model.UserSession), nil).
+		Return(&model.User{ID: 1, Username: "alice"}, &model.UserSession{UserID: 1, SessionID: "session"}, nil).
 		Twice()
 	return jwtauth.NewAuthMiddleware(mockService).Auth()
 }
@@ -55,7 +56,7 @@ func TestUserCreate(t *testing.T) {
 
 	//fail
 	user := model.User{Username: "john", Password: "secret"}
-	jsonBody, _ := json.Marshal(user)
+	jsonBody, _ := json.Marshal(dto.CreateUserRequest{Username: user.Username, Email: user.Email, Password: user.Password})
 
 	mockService.On("CreateUser", mock.AnythingOfType("*model.User")).Once().Return(nil)
 
@@ -70,7 +71,7 @@ func TestUserCreate(t *testing.T) {
 
 	//success
 	user = model.User{Username: "john", Email: "john@example.com", Password: "secret"}
-	jsonBody, _ = json.Marshal(user)
+	jsonBody, _ = json.Marshal(dto.CreateUserRequest{Username: user.Username, Email: user.Email, Password: user.Password})
 	//mockService.On("CreateUser", mock.AnythingOfType("*model.User")).Return(nil).Once()
 
 	req = httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewBuffer(jsonBody))

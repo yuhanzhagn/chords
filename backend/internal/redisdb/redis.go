@@ -30,6 +30,7 @@ func NewClient(ctx context.Context, cfg Config) (*redis.Client, error) {
 	})
 
 	if err := client.Ping(ctx).Err(); err != nil {
+		client.Close()
 		return nil, fmt.Errorf("redis ping failed: %w", err)
 	}
 
@@ -39,12 +40,4 @@ func NewClient(ctx context.Context, cfg Config) (*redis.Client, error) {
 
 func InitRedis(ctx context.Context) (*redis.Client, error) {
 	return NewClient(ctx, DefaultConfig())
-}
-
-func ClearRedis(rdb *redis.Client) {
-	ctx := context.Background()
-	err := rdb.FlushDB(ctx).Err() // flushes the current database
-	if err != nil {
-		log.Fatal("failed to flush redis:", err)
-	}
 }

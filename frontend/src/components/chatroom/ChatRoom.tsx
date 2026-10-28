@@ -58,10 +58,10 @@ export default function ChatRoom() {
   }
 
   function send(text: string) {
-    if (!room || !user) return;
+    if (!room || !user) return false;
     const id = (BigInt(user.id) * 10_000_000_000_000n + BigInt(Date.now())).toString();
 
-    socket.send({
+    const sent = socket.send({
       id: id,
       msgType: "message",
       roomId: room.ID,
@@ -71,6 +71,7 @@ export default function ChatRoom() {
       createdAt: String(Date.now()),
     });
 
+    if (!sent) return false;
     msgStore.add({
       ID: id,
       UserID: user.id,
@@ -81,10 +82,12 @@ export default function ChatRoom() {
       status: "pending",
       fromself: true,
     });
+    return true;
   }
 
   return (
     <Card className="overflow-hidden border-border/70 bg-card/95">
+      {socket.error && <p role="alert" className="px-4 py-2 text-sm text-destructive">{socket.error}</p>}
       <div className="grid h-[70vh] grid-cols-1 lg:grid-cols-[280px_1fr]">
         <ChatSidebar
           chatrooms={chatrooms}

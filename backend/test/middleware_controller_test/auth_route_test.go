@@ -90,14 +90,6 @@ func TestAuthLogin(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	mockService.
-		On("GetUserIDByUsername", "john").
-		Return(uint(1), nil)
-
-	mockService.
-		On("ForceLogoutAll", uint(1)).
-		Return(nil)
-
-	mockService.
 		On("Login", "john", "wrong").
 		Return(uint(0), "", "", "", errors.New("invalid credentials"))
 

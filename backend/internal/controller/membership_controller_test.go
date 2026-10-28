@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"backend/internal/identity"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -27,7 +28,7 @@ func TestMembershipController_AddUser_Success(t *testing.T) {
 	}
 
 	mockService.
-		On("AddUserToChatRoom", "john", uint(1)).
+		On("AddUserToChatRoom", mock.Anything, "john", uint(1)).
 		Return(nil).
 		Once()
 
@@ -78,7 +79,7 @@ func TestMembershipController_AddUser_ServiceError(t *testing.T) {
 	}
 
 	mockService.
-		On("AddUserToChatRoom", "john", uint(99)).
+		On("AddUserToChatRoom", mock.Anything, "john", uint(99)).
 		Return(errors.New("chatroom not found")).
 		Once()
 
@@ -111,12 +112,13 @@ func TestMembershipController_GetUserChatRooms_Success(t *testing.T) {
 	}
 
 	mockService.
-		On("GetUserSubscribedChatRooms", "john").
+		On("GetUserSubscribedChatRooms", mock.Anything, "john").
 		Return(rooms, nil).
 		Once()
 
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/memberships/john/chatrooms", nil)
 
 	controller.GetUserChatRooms(ctx, "john")
 
@@ -134,12 +136,13 @@ func TestMembershipController_GetUserChatRooms_ServiceError(t *testing.T) {
 	controller := NewMembershipController(mockService)
 
 	mockService.
-		On("GetUserSubscribedChatRooms", "john").
+		On("GetUserSubscribedChatRooms", mock.Anything, "john").
 		Return([]model.ChatRoom{}, errors.New("db error")).
 		Once()
 
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/memberships/john/chatrooms", nil)
 
 	controller.GetUserChatRooms(ctx, "john")
 
@@ -153,13 +156,13 @@ type MockMembershipService struct {
 	mock.Mock
 }
 
-func (m *MockMembershipService) AddUserToChatRoom(username string, chatRoomID uint) error {
-	args := m.Called(username, chatRoomID)
+func (m *MockMembershipService) AddUserToChatRoom(p identity.Principal, username string, chatRoomID uint) error {
+	args := m.Called(p, username, chatRoomID)
 	return args.Error(0)
 }
 
-func (m *MockMembershipService) GetUserSubscribedChatRooms(username string) ([]model.ChatRoom, error) {
-	args := m.Called(username)
+func (m *MockMembershipService) GetUserSubscribedChatRooms(p identity.Principal, username string) ([]model.ChatRoom, error) {
+	args := m.Called(p, username)
 	return args.Get(0).([]model.ChatRoom), args.Error(1)
 }
 

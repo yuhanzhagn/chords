@@ -62,7 +62,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusUnauthorized, w.Code)
-	require.Contains(t, w.Body.String(), "invalid token")
+	require.Contains(t, w.Body.String(), "Invalid or expired session")
 }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
@@ -73,7 +73,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 		},
 	}
 	mw := &jwtauth.AuthMiddleware{AuthSvc: authSvc}
-	authSvc.On("ValidateJWT", "good-token").Return(nil, nil, nil)
+	authSvc.On("ValidateJWT", "good-token").Return(&model.User{ID: 1, Username: "alice"}, &model.UserSession{UserID: 1, SessionID: "session"}, nil)
 	router := setupRouter(mw.Auth())
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)

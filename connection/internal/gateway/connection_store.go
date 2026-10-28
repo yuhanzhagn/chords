@@ -11,7 +11,6 @@ type ConnectionStore interface {
 	RemoveClientFromGroup(clientID uint32, groupID uint32)
 
 	GetClient(clientID uint32) *Client
-	SetClientUserID(clientID uint32, userID uint32)
 	GetClientUserID(clientID uint32) uint32
 	GroupsForClient(clientID uint32) []uint32
 	GetClientsInGroup(groupID uint32) []*Client
@@ -51,14 +50,6 @@ func (s *MemoryStore) GetClient(clientID uint32) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.clients[clientID]
-}
-
-func (s *MemoryStore) SetClientUserID(clientID uint32, userID uint32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if c, ok := s.clients[clientID]; ok && c != nil {
-		c.UserID = userID
-	}
 }
 
 func (s *MemoryStore) GetClientUserID(clientID uint32) uint32 {

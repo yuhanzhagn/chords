@@ -1,6 +1,7 @@
 package middleware_controller
 
 import (
+	"backend/internal/identity"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -48,7 +49,7 @@ func TestAddUserToChatRoom(t *testing.T) {
 	jsonBody, _ := json.Marshal(msg)
 
 	mockService.
-		On("AddUserToChatRoom", "Thom Yorke", uint(1)).
+		On("AddUserToChatRoom", mock.Anything, "Thom Yorke", uint(1)).
 		Once().
 		Return(errors.New("DB error"))
 
@@ -65,7 +66,7 @@ func TestAddUserToChatRoom(t *testing.T) {
 	// msg := model.User{Content: "Schizophrenia is taking me home", UserID: uint(1), ChatRoomID: uint(1)}
 	// jsonBody, _ = json.Marshal(msg)
 	mockService.
-		On("AddUserToChatRoom", "Thom Yorke", uint(1)).
+		On("AddUserToChatRoom", mock.Anything, "Thom Yorke", uint(1)).
 		Once().
 		Return(nil)
 
@@ -107,7 +108,7 @@ func TestGetChatRoomByUser(t *testing.T) {
 	// Return([]model.ChatRoom{model.ChatRoom{}}, errors.New("DB error"))
 
 	mockService.
-		On("GetUserSubscribedChatRooms", "DaveGrohl").
+		On("GetUserSubscribedChatRooms", mock.Anything, "DaveGrohl").
 		Once().
 		Return([]model.ChatRoom{model.ChatRoom{}}, errors.New("DB error"))
 
@@ -129,7 +130,7 @@ func TestGetChatRoomByUser(t *testing.T) {
 	// Return([]model.ChatRoom{model.ChatRoom{}}, nil)
 
 	mockService.
-		On("GetUserSubscribedChatRooms", "DaveGrohl").
+		On("GetUserSubscribedChatRooms", mock.Anything, "DaveGrohl").
 		Once().
 		Return([]model.ChatRoom{model.ChatRoom{}}, nil)
 
@@ -147,13 +148,13 @@ type MockMembershipService struct {
 	mock.Mock
 }
 
-func (m *MockMembershipService) AddUserToChatRoom(username string, chatRoomID uint) error {
-	args := m.Called(username, chatRoomID)
+func (m *MockMembershipService) AddUserToChatRoom(p identity.Principal, username string, chatRoomID uint) error {
+	args := m.Called(p, username, chatRoomID)
 	return args.Error(0)
 }
 
-func (m *MockMembershipService) GetUserSubscribedChatRooms(username string) ([]model.ChatRoom, error) {
-	args := m.Called(username)
+func (m *MockMembershipService) GetUserSubscribedChatRooms(p identity.Principal, username string) ([]model.ChatRoom, error) {
+	args := m.Called(p, username)
 	return args.Get(0).([]model.ChatRoom), args.Error(1)
 }
 

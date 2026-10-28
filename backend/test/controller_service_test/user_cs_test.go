@@ -18,6 +18,7 @@ import (
 	//    "gorm.io/gorm"
 
 	"backend/internal/controller"
+	"backend/internal/dto"
 	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/internal/service"
@@ -50,7 +51,7 @@ func TestUserCRUD(t *testing.T) {
 	setupUserRoute(r)
 
 	body := model.User{Username: "BlackFrancis", Email: "pixies@gmail.com", Password: "test123"}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(dto.CreateUserRequest{Username: body.Username, Email: body.Email, Password: body.Password})
 
 	//register new account
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewBuffer(jsonBody))

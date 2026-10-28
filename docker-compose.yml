@@ -3,6 +3,8 @@ version: "3.9"
 services:
   app:
     build: .
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to at least 32 random bytes}
     container_name: go-app
     depends_on:
       redis:
@@ -23,6 +25,8 @@ services:
   connection:
     build: .
     container_name: go-connection
+    environment:
+      FANOUT_TOKEN: ${FANOUT_TOKEN:?Set FANOUT_TOKEN to at least 32 random visible ASCII bytes}
     depends_on:
       redis:
         condition: service_started
@@ -42,6 +46,8 @@ services:
   fanout:
     build: .
     container_name: go-fanout
+    environment:
+      FANOUT_TOKEN: ${FANOUT_TOKEN:?Set FANOUT_TOKEN to at least 32 random visible ASCII bytes}
     depends_on:
       redis:
         condition: service_started

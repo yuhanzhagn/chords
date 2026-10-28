@@ -155,6 +155,7 @@ func SetupRouter(db *gorm.DB, rds *redis.Client) *gin.Engine {
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
 
 	api := r.Group("/api")
+	api.POST("/auth/ws-authorize", loadsheddingFunc, authFunc, controller.WSAuthorize(messageService))
 	SetupUserRouter(api, userService, authFunc, loadsheddingFunc)
 	SetupChatroomRouter(api, chatRoomService, authFunc, loadsheddingFunc)
 	SetupMessageRouter(api, messageService, authFunc, loadsheddingFunc)

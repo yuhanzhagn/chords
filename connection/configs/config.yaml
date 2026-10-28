@@ -2,6 +2,7 @@ server:
   address: ":8081"
 
 fanout:
+  # Required FANOUT_TOKEN is read only from the environment; no YAML/default secret.
   address: ":8082"
   advertise_addr: "connection:8082"
 
@@ -24,3 +25,6 @@ redis:
   room_users_ttl: "2m"
   user_gateway_ttl: "2m"
   presence_refresh_interval: "30s"
+
+auth:
+  backend_url: "http://app:8080"

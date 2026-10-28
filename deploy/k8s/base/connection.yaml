@@ -19,6 +19,14 @@ spec:
         - name: connection
           image: gochatroom/connection:kind
           imagePullPolicy: IfNotPresent
+          env:
+            - name: FANOUT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: chords-fanout
+                  key: FANOUT_TOKEN
+            - name: CHORDS_AUTH_BACKEND_URL
+              value: http://backend:8080
           ports:
             - name: ws
               containerPort: 8081

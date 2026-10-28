@@ -17,6 +17,7 @@ import (
 	//   "gorm.io/driver/sqlite"
 	//    "gorm.io/gorm"
 
+	"backend/internal/identity"
 	"backend/internal/model"
 	//    "backend/internal/service"
 	"backend/internal/controller"
@@ -29,11 +30,11 @@ import (
 )
 
 /*
-	chatrooms.POST("", chatRoomController.CreateChatRoom)
-	chatrooms.GET("", chatRoomController.GetAllChatRooms)
-	chatrooms.GET("/:id", chatRoomController.GetChatRoomByID)
-	chatrooms.DELETE("/:id", chatRoomController.DeleteChatRoom)
-	chatrooms.GET("/search", chatRoomController.SearchChatRooms)
+chatrooms.POST("", chatRoomController.CreateChatRoom)
+chatrooms.GET("", chatRoomController.GetAllChatRooms)
+chatrooms.GET("/:id", chatRoomController.GetChatRoomByID)
+chatrooms.DELETE("/:id", chatRoomController.DeleteChatRoom)
+chatrooms.GET("/search", chatRoomController.SearchChatRooms)
 */
 func TestChatroomCreate(t *testing.T) {
 	r := setupBasicMiddleware(t)
@@ -52,7 +53,7 @@ func TestChatroomCreate(t *testing.T) {
 
 	//fail
 	mockService.
-		On("CreateChatRoom", "general").
+		On("CreateChatRoom", identity.New(1, "alice", "session"), "general").
 		Return(&model.ChatRoom{}, errors.New("DB error")).
 		Once()
 	body := map[string]string{"name": "general"}
@@ -71,7 +72,7 @@ func TestChatroomCreate(t *testing.T) {
 	//success
 	chatRoom := &model.ChatRoom{ID: 1, Name: "general"}
 	mockService.
-		On("CreateChatRoom", "general").
+		On("CreateChatRoom", identity.New(1, "alice", "session"), "general").
 		Return(chatRoom, nil).
 		Once()
 	body = map[string]string{"name": "general"}
@@ -206,7 +207,7 @@ func TestChatroomDelete(t *testing.T) {
 	//success
 	//chatRoom := new(model.ChatRoom{ID: 1, Name: "general"})
 	mockService.
-		On("DeleteChatRoom", uint(1)).
+		On("DeleteChatRoom", identity.New(1, "alice", "session"), uint(1)).
 		Return(nil).
 		Once()
 	req = httptest.NewRequest(http.MethodDelete, "/api/chatrooms/1", nil)
@@ -269,8 +270,8 @@ type MockChatRoomService struct {
 	mock.Mock
 }
 
-func (m *MockChatRoomService) CreateChatRoom(name string) (*model.ChatRoom, error) {
-	args := m.Called(name)
+func (m *MockChatRoomService) CreateChatRoom(p identity.Principal, name string) (*model.ChatRoom, error) {
+	args := m.Called(p, name)
 	return args.Get(0).(*model.ChatRoom), args.Error(1)
 }
 
@@ -284,8 +285,8 @@ func (m *MockChatRoomService) GetChatRoomByID(id uint) (*model.ChatRoom, error) 
 	return args.Get(0).(*model.ChatRoom), args.Error(1)
 }
 
-func (m *MockChatRoomService) DeleteChatRoom(id uint) error {
-	args := m.Called(id)
+func (m *MockChatRoomService) DeleteChatRoom(p identity.Principal, id uint) error {
+	args := m.Called(p, id)
 	return args.Error(0)
 }
 

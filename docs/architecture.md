@@ -23,24 +23,30 @@ sequenceDiagram
     participant B as backend
     participant D as SQLite
     participant F as fanout
+    U->>C: auth 首帧
+    C->>B: 校验 access token / session
+    C->>U: ready
     U->>C: join（protobuf）
+    C->>B: 检查 session / 永久成员
     C->>C: 加入本地 group
     C->>R: room users / user gateway
     U->>C: message（protobuf）
     C->>R: 更新在线路由
-    C->>K: user-request（async + retry sink）
+    C->>B: 检查 session / 成员，签发内容绑定授权
+    C->>K: user-request + 命令凭据 header（async + retry）
     K->>B: backend-ws-processor
-    B->>D: CreateMessage
+    B->>D: 验证命令凭据 / session / 成员，再 CreateMessage
     B->>K: notification（原事件 + Unix 秒时间）
     K->>F: fanout-workers
     F->>R: 房间 users / gateway 地址
     F->>C: POST /fanout（按网关聚合）
-    C->>U: 广播给本地 room group
+    C->>B: 投递前检查 session / 成员
+    C->>U: 广播给有效本地 room 成员
 ```
 
-这是当前装配路径。join/leave 仅在网关处理，不发布 Kafka；backend 虽有 join/leave 分支，正常网关路径不会触发它们。只有 message 进入 Kafka。
+这是当前装配路径。join/leave 仅在网关处理，不发布 Kafka；backend 不接受这两类 Kafka 命令。只有 message 进入 Kafka。
 
-[KafkaService](../backend/internal/service/kafka_service.go) 写库后仍转发原事件；写库失败也会继续发布，且没有把数据库分配的 Message.ID 回填至事件。REST `POST /api/messages` 只调用 service 写库，不发布 notification。两条路径不具备相同投递语义。
+[KafkaService](../backend/internal/service/kafka_service.go) 写库后仍转发原事件；写库/授权失败会停止发布，但没有把数据库分配的 Message.ID 回填至事件。REST `POST /api/messages` 只调用 service 写库，不发布 notification。两条路径不具备相同投递语义。
 
 ## 状态边界
 
@@ -63,7 +69,7 @@ sequenceDiagram
 
 fanout 默认依次请求各网关，单请求超时 3 秒；分发失败仍标记 Kafka 消息。没有端到端 ACK、持久补发、死信、幂等落库或 exactly-once 保证。backend/gateway 也没有完整信号驱动 draining 流程。详细问题与验收条件见 [现状](status.md)。
 
-当前 WS 认证没有接线，/fanout 没有认证，backend 密钥硬编码；这些是当前实现状态，不能作为生产安全边界。
+WS 已采用 backend 驱动的首帧认证与逐帧/投递授权；backend 密钥由 JWT_SECRET 提供。内部 /fanout 已增加独立 FANOUT_TOKEN 服务鉴权和 worker 禁止重定向；仍需可信 TLS/网络，broker ACL 未完成。授权和未决产品权限见 [ADR](decisions/0001-identity-and-room-authorization.md)。
 
 ## 部署关系
 

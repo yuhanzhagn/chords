@@ -1,6 +1,7 @@
 package service
 
 import (
+	"backend/internal/identity"
 	"errors"
 	"log"
 	"time"
@@ -21,12 +22,17 @@ func NewMembershipService(repos *repo.RepoContainer, c cache.Cache[[]model.ChatR
 }
 
 type MembershipService interface {
-	AddUserToChatRoom(username string, chatRoomID uint) error
-	GetUserSubscribedChatRooms(username string) ([]model.ChatRoom, error)
-	GetUserChatRoomsFromDB(username string) ([]model.ChatRoom, error)
+	AddUserToChatRoom(p identity.Principal, username string, chatRoomID uint) error
+	GetUserSubscribedChatRooms(p identity.Principal, username string) ([]model.ChatRoom, error)
 }
 
-func (s *membershipService) AddUserToChatRoom(username string, chatRoomID uint) error {
+func (s *membershipService) AddUserToChatRoom(p identity.Principal, username string, chatRoomID uint) error {
+	if err := requireSession(s.repos, p); err != nil {
+		return err
+	}
+	if username != p.Username() {
+		return ErrForbidden
+	}
 	user, err := s.repos.User.GetByUsername(username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -57,19 +63,25 @@ func (s *membershipService) AddUserToChatRoom(username string, chatRoomID uint) 
 		return err
 	}
 
-	rooms, _ := s.GetUserChatRoomsFromDB(username)
+	rooms, _ := s.getUserChatRoomsFromDB(username)
 	s.cache.Set(username, rooms, 30*time.Minute)
 	return nil
 }
 
-func (s *membershipService) GetUserSubscribedChatRooms(username string) ([]model.ChatRoom, error) {
+func (s *membershipService) GetUserSubscribedChatRooms(p identity.Principal, username string) ([]model.ChatRoom, error) {
+	if err := requireSession(s.repos, p); err != nil {
+		return nil, err
+	}
+	if username != p.Username() {
+		return nil, ErrForbidden
+	}
 	rooms, isHit := s.cache.Get(username)
 	if isHit {
 		log.Println("Cache hit")
 		return rooms, nil
 	}
 
-	rooms, err := s.GetUserChatRoomsFromDB(username)
+	rooms, err := s.getUserChatRoomsFromDB(username)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +95,7 @@ func (s *membershipService) GetUserSubscribedChatRooms(username string) ([]model
 	return rooms, nil
 }
 
-func (s *membershipService) GetUserChatRoomsFromDB(username string) ([]model.ChatRoom, error) {
+func (s *membershipService) getUserChatRoomsFromDB(username string) ([]model.ChatRoom, error) {
 	if username == "" {
 		return nil, errors.New("username is required")
 	}

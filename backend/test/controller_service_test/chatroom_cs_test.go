@@ -1,6 +1,7 @@
 package controller_service_test
 
 import (
+	"backend/internal/identity"
 	"encoding/json"
 	"testing"
 	"time"
@@ -29,9 +30,11 @@ import (
 	//	"backend/utils"
 )
 
-func setupChatRoomRoute(r *gin.Engine) {
+func setupChatRoomRoute(t *testing.T, r *gin.Engine) {
 	db := setupTestDB()
 	repos := repo.NewRepoContainer(db)
+	require.NoError(t, db.Create(&model.User{ID: 1, Username: "alice", Email: "a@test.com", Password: "hash"}).Error)
+	require.NoError(t, db.Create(&model.UserSession{UserID: 1, SessionID: "session", ExpiresAt: time.Now().Add(time.Hour)}).Error)
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
 
 	chatRoomService := service.NewChatRoomService(repos)
@@ -41,6 +44,10 @@ func setupChatRoomRoute(r *gin.Engine) {
 
 	//	load shed
 	chatrooms.Use(loadsheddingFunc)
+	chatrooms.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(identity.WithContext(c.Request.Context(), identity.New(1, "alice", "session")))
+		c.Next()
+	})
 	// Apply middleware to all /chatrooms routes
 	{
 		chatrooms.POST("", chatRoomController.CreateChatRoom)
@@ -54,7 +61,7 @@ func setupChatRoomRoute(r *gin.Engine) {
 
 func TestChatRoomCRUD(t *testing.T) {
 	r := setupBasicMiddleware()
-	setupChatRoomRoute(r)
+	setupChatRoomRoute(t, r)
 
 	body := model.ChatRoom{Name: "Noise"}
 	jsonBody, _ := json.Marshal(body)

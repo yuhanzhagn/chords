@@ -5,28 +5,41 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"fanout/internal/registry"
+	"fanout/internal/fanoutauth"
 	kafkapb "fanout/proto/kafka"
 )
 
 type Config struct {
 	GatewayPath string
+	Token       string
+}
+
+type Registry interface {
+	RoomUsers(context.Context, uint32) ([]uint32, error)
+	UserGateways(context.Context, []uint32) (map[uint32]string, error)
 }
 
 type Dispatcher struct {
-	registry *registry.RedisRegistry
+	registry Registry
 	client   *http.Client
 	cfg      Config
 }
 
-func NewDispatcher(reg *registry.RedisRegistry, client *http.Client, cfg Config) *Dispatcher {
-	return &Dispatcher{registry: reg, client: client, cfg: cfg}
+func NewDispatcher(reg Registry, client *http.Client, cfg Config) (*Dispatcher, error) {
+	if err := fanoutauth.Validate(cfg.Token); err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("http client is required")
+	}
+	safeClient := *client
+	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Dispatcher{registry: reg, client: &safeClient, cfg: cfg}, nil
 }
 
 type FanoutRequest struct {
@@ -96,6 +109,7 @@ func (d *Dispatcher) send(ctx context.Context, addr string, userIDs []uint32, ev
 		return fmt.Errorf("empty gateway address")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(fanoutauth.Header, d.cfg.Token)
 
 	resp, err := d.client.Do(req)
 	if err != nil {
@@ -103,9 +117,9 @@ func (d *Dispatcher) send(ctx context.Context, addr string, userIDs []uint32, ev
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("gateway response %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// A peer may echo credentials in its body; never include it in errors/logs.
+		return fmt.Errorf("gateway response status %d", resp.StatusCode)
 	}
 
 	return nil

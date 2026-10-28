@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"backend/internal/identity"
 	"backend/internal/model"
 )
 
@@ -24,7 +25,7 @@ func TestChatRoomController_CreateChatRoom_Success(t *testing.T) {
 	chatRoom := &model.ChatRoom{ID: 1, Name: "general"}
 
 	mockService.
-		On("CreateChatRoom", "general").
+		On("CreateChatRoom", identity.New(1, "alice", "session"), "general").
 		Return(chatRoom, nil).
 		Once()
 
@@ -36,7 +37,7 @@ func TestChatRoomController_CreateChatRoom_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.CreateChatRoom(ctx)
 
@@ -55,7 +56,7 @@ func TestChatRoomController_CreateChatRoom_InvalidInput(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.CreateChatRoom(ctx)
 
@@ -82,7 +83,7 @@ func TestChatRoomController_GetAllChatRooms_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.GetAllChatRooms(ctx)
 
@@ -109,7 +110,7 @@ func TestChatRoomController_GetChatRoomByID_Success(t *testing.T) {
 
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Params = gin.Params{{Key: "id", Value: "1"}}
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.GetChatRoomByID(ctx)
 
@@ -128,7 +129,7 @@ func TestChatRoomController_GetChatRoomByID_InvalidID(t *testing.T) {
 
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Params = gin.Params{{Key: "id", Value: "abc"}}
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.GetChatRoomByID(ctx)
 
@@ -142,7 +143,7 @@ func TestChatRoomController_DeleteChatRoom_Success(t *testing.T) {
 	controller := NewChatRoomController(mockService)
 
 	mockService.
-		On("DeleteChatRoom", uint(1)).
+		On("DeleteChatRoom", identity.New(1, "alice", "session"), uint(1)).
 		Return(nil).
 		Once()
 
@@ -151,7 +152,7 @@ func TestChatRoomController_DeleteChatRoom_Success(t *testing.T) {
 
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Params = gin.Params{{Key: "id", Value: "1"}}
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.DeleteChatRoom(ctx)
 
@@ -179,7 +180,7 @@ func TestChatRoomController_SearchChatRooms_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.SearchChatRooms(ctx)
 
@@ -197,7 +198,7 @@ func TestChatRoomController_SearchChatRooms_MissingQuery(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	ctx.Request = req.WithContext(identity.WithContext(req.Context(), identity.New(1, "alice", "session")))
 
 	controller.SearchChatRooms(ctx)
 
@@ -208,8 +209,8 @@ type MockChatRoomService struct {
 	mock.Mock
 }
 
-func (m *MockChatRoomService) CreateChatRoom(name string) (*model.ChatRoom, error) {
-	args := m.Called(name)
+func (m *MockChatRoomService) CreateChatRoom(p identity.Principal, name string) (*model.ChatRoom, error) {
+	args := m.Called(p, name)
 	return args.Get(0).(*model.ChatRoom), args.Error(1)
 }
 
@@ -223,8 +224,8 @@ func (m *MockChatRoomService) GetChatRoomByID(id uint) (*model.ChatRoom, error) 
 	return args.Get(0).(*model.ChatRoom), args.Error(1)
 }
 
-func (m *MockChatRoomService) DeleteChatRoom(id uint) error {
-	args := m.Called(id)
+func (m *MockChatRoomService) DeleteChatRoom(p identity.Principal, id uint) error {
+	args := m.Called(p, id)
 	return args.Error(0)
 }
 

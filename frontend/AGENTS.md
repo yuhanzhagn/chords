@@ -9,9 +9,9 @@
 - `hooks/useChatrooms.tsx`、`useMessages.tsx`：REST/分页/消息状态；`useChatSocket.tsx`：protobuf/重连/join/leave/send。
 - `services/api.tsx` 拼接 `http://${REACT_APP_URL}`；`services/socket.tsx` 硬编码 ws://localhost:8000/ws。
 - `.env.example` 不带协议；改 URL 约定时还需搜索页面里的直接 fetch。
-- token 当前只控制是否建连，没有发送给 WS 服务端；认证接入需跨模块设计。
+- WS 连接后首帧发送 JSON auth/token，收到 JSON ready 后才能发 protobuf；拒绝认证（1008）停止重连并显示错误，禁止打印 token。
 - REST 消息用 ID/UserID/RoomID/Content/CreatedAt；TS protobuf 用 camelCase，id/createdAt 是字符串、content 是 Uint8Array。避免丢失 64 位精度。
-- 以 TempID 匹配 optimistic pending；CONFIRM 当前只替换已有消息，不能添加其他用户新消息；重连未自动重入房间。见 [待办](../docs/status.md)。
+- 以 TempID 匹配 optimistic pending；CONFIRM 当前只替换已有消息，不能添加其他用户新消息；认证 ready 后会重新加入所选房间；重连仍未补拉遗漏历史。见 [待办](../docs/status.md)。
 - 复用 components/ui 和现有 hooks，不手改 src/proto/kafka/event.ts。
 
 ```bash

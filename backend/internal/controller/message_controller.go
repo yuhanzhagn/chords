@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"backend/internal/identity"
 	"backend/internal/service"
 	"net/http"
 	"strconv"
@@ -30,9 +31,9 @@ func (mc *MessageController) CreateMessage(c *gin.Context) {
 		return
 	}
 
-	msg, err := mc.MessageService.CreateMessage(input.UserID, input.ChatRoomID, input.Content)
+	msg, err := mc.MessageService.CreateMessage(identity.FromContext(c.Request.Context()), input.UserID, input.ChatRoomID, input.Content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(serviceStatus(err, http.StatusInternalServerError), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -52,9 +53,9 @@ func (mc *MessageController) GetMessagesByChatRoom(c *gin.Context) {
 	beforeParam := c.Query("before_id")
 
 	if limitParam == "" && beforeParam == "" {
-		messages, err := mc.MessageService.GetMessagesByChatRoom(uint(chatRoomID))
+		messages, err := mc.MessageService.GetMessagesByChatRoom(identity.FromContext(c.Request.Context()), uint(chatRoomID))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(serviceStatus(err, http.StatusInternalServerError), gin.H{"error": err.Error()})
 			return
 		}
 
@@ -82,9 +83,9 @@ func (mc *MessageController) GetMessagesByChatRoom(c *gin.Context) {
 		beforeID = parsedBefore
 	}
 
-	messages, err := mc.MessageService.GetMessagesPage(uint(chatRoomID), uint(beforeID), limit)
+	messages, err := mc.MessageService.GetMessagesPage(identity.FromContext(c.Request.Context()), uint(chatRoomID), uint(beforeID), limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(serviceStatus(err, http.StatusInternalServerError), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -100,8 +101,8 @@ func (mc *MessageController) DeleteMessage(c *gin.Context) {
 		return
 	}
 
-	if err := mc.MessageService.DeleteMessage(uint(msgID)); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	if err := mc.MessageService.DeleteMessage(identity.FromContext(c.Request.Context()), uint(msgID)); err != nil {
+		c.JSON(serviceStatus(err, http.StatusNotFound), gin.H{"error": err.Error()})
 		return
 	}
 

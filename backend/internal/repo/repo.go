@@ -1,9 +1,13 @@
 package repo
 
-import "gorm.io/gorm"
+import (
+	"database/sql"
+	"gorm.io/gorm"
+)
 
 // gormDB abstracts *gorm.DB for repo implementations.
 type gormDB interface {
+	Transaction(fc func(tx *gorm.DB) error, opts ...*sql.TxOptions) error
 	Create(value interface{}) *gorm.DB
 	Save(value interface{}) *gorm.DB
 	First(dest interface{}, conds ...interface{}) *gorm.DB

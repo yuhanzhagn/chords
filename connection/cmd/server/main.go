@@ -18,18 +18,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 )
 
-const devSharedJWTSecret = "dev-shared-jwt-secret"
-
 var nextWSClientID atomic.Uint32
-
-type ConnectionJWTClaims struct {
-	UserID string `json:"user_id"`
-	jwt.RegisteredClaims
-}
 
 type FanoutRegistry interface {
 	AddRoomUser(ctx context.Context, roomID, userID uint32) error
@@ -38,13 +30,17 @@ type FanoutRegistry interface {
 	RemoveUserGateway(ctx context.Context, userID uint32) error
 }
 
-func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc) http.Handler {
+func WsHandler[T any](hub *gateway.Hub[T], inboundHandler handler.HandlerFunc, authenticate gateway.Authenticator) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := nextWSClientID.Add(1)
-		if userID == 0 {
-			userID = nextWSClientID.Add(1)
+		if authenticate == nil {
+			http.Error(w, "authentication unavailable", http.StatusServiceUnavailable)
+			return
 		}
-		gateway.ServeWs(userID, w, r, hub, inboundHandler)
+		clientID := nextWSClientID.Add(1)
+		if clientID == 0 {
+			clientID = nextWSClientID.Add(1)
+		}
+		gateway.ServeWs(clientID, w, r, hub, inboundHandler, authenticate)
 	})
 }
 
@@ -86,9 +82,6 @@ func groupAssignmentHandler(
 			}
 			userID := inbound.Event.UserId
 			roomID := inbound.Event.RoomId
-			if userID != 0 {
-				hub.SetClientUserID(inbound.ClientID, userID)
-			}
 			if userID != 0 {
 				if err := reg.SetUserGateway(ctx, userID, gatewayAddr); err != nil {
 					log.Printf("failed to set user gateway: %v", err)
@@ -148,16 +141,10 @@ func setupMultiSink(
 func setupHandlerChain(
 	hub *gateway.Hub[*kafkapb.KafkaEvent],
 	multiSink sink.Sink[*kafkapb.KafkaEvent],
-	jwtMiddleware handler.Middleware,
 	reg FanoutRegistry,
 	gatewayAddr string,
 ) handler.HandlerFunc {
 	assignGroup := groupAssignmentHandler(hub, reg, gatewayAddr)
-	rateLimitMiddleware := middlewares.ConnectionRateLimitMiddleware(middlewares.ConnectionRateLimitOptions{
-		RatePerSecond: 20,
-		Burst:         40,
-		IdleTTL:       5 * time.Minute,
-	})
 
 	groupAssignmentMiddleware := func(next handler.HandlerFunc) handler.HandlerFunc {
 		return func(c *handler.Context) error {
@@ -175,10 +162,8 @@ func setupHandlerChain(
 			return next(c)
 		}
 	}
-	// TODO: add logging middleware, etc.
-	// TODO: add jwt auth middleware after deciced jwt claims structure and how to pass jwt from client (e.g., via query param or subprotocol)
 	finalSinkHandler := handler.SinkHandler(messageEventSinkWriter(hub, multiSink))
-	return handler.NewHandlerChain(finalSinkHandler, rateLimitMiddleware, groupAssignmentMiddleware).Build()
+	return handler.NewHandlerChain(finalSinkHandler, groupAssignmentMiddleware).Build()
 }
 
 func main() {
@@ -216,11 +201,13 @@ func main() {
 	hub.SetDisconnectHandler(newDisconnectHandler(hub, reg))
 	startPresenceRefresher(reg, hub, cfg.Fanout.AdvertiseAddr, cfg.Redis.PresenceRefresh)
 
-	jwtMiddleware := newJWTMiddleware()
-	inboundHandler := setupHandlerChain(hub, multiSink, jwtMiddleware, reg, cfg.Fanout.AdvertiseAddr)
+	inboundHandler := setupHandlerChain(hub, multiSink, reg, cfg.Fanout.AdvertiseAddr)
 
-	mux := newMux(hub, inboundHandler)
-	fanoutSource := source.NewFanoutHTTPHandler(hub, cfg.Fanout.Address)
+	mux := newMux(hub, inboundHandler, newBackendAuthorizer(cfg.Auth.BackendURL).authenticator(inboundHandler))
+	fanoutSource, err := source.NewFanoutHTTPHandler(hub, cfg.Fanout.Address, cfg.Fanout.Token)
+	if err != nil {
+		log.Fatalf("failed to build fanout source: %v", err)
+	}
 	if err := fanoutSource.Start(context.Background()); err != nil {
 		log.Fatalf("failed to start fanout http source: %v", err)
 	}
@@ -276,25 +263,13 @@ func mustSetupMultiSink(
 	}
 }
 
-func newJWTMiddleware() handler.Middleware {
-	return middlewares.JWTAuthMiddleware[*ConnectionJWTClaims](middlewares.JWTAuthOptions[*ConnectionJWTClaims]{
-		NewClaims: func() *ConnectionJWTClaims {
-			return &ConnectionJWTClaims{}
-		},
-		Keyfunc: middlewares.KeyfuncByAlgorithm(map[string]any{
-			jwt.SigningMethodHS256.Alg(): []byte(devSharedJWTSecret),
-			jwt.SigningMethodHS384.Alg(): []byte(devSharedJWTSecret),
-			jwt.SigningMethodHS512.Alg(): []byte(devSharedJWTSecret),
-		}),
-	})
-}
-
 func newMux(
 	hub *gateway.Hub[*kafkapb.KafkaEvent],
 	inboundHandler handler.HandlerFunc,
+	authenticate gateway.Authenticator,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
-	wsHandler := WsHandler(hub, inboundHandler)
+	wsHandler := WsHandler(hub, inboundHandler, authenticate)
 	globalConnLimiter := middlewares.GlobalConnectionRateLimitMiddleware(middlewares.GlobalConnectionRateLimitOptions{
 		RatePerSecond: 30,
 		Burst:         60,

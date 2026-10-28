@@ -40,8 +40,8 @@ make check-python         # Python 源码语法检查，不代表服务运行成
 
 ## 开始运行前必须了解
 
-- `backend/cmd/main.go` 启动时调用 `ClearRedis`，会 `FLUSHDB`。仅在隔离的开发 Redis 上运行完整后端；常规测试无需启动它。
-- WS 当前未接入 JWT 认证；传入 `setupHandlerChain` 的 `jwtMiddleware` 没有被使用。身份取自事件 `UserId`，不能将现状当作认证保证。
+- backend 启动不清 Redis；启动前必须提供至少 32 字节的 `JWT_SECRET`。常规测试使用隔离测试密钥，无需启动服务。
+- WS 首帧认证由 backend 校验 session，身份固定；历史、发送、订阅仅成员可用。Kafka 入站需短效命令授权 header；协议与未决权限见 `docs/contracts.md`、ADR。
 - 默认 Kafka/Redis 地址是 Docker 服务名 `kafka`/`redis`；宿主机执行 `go run` 不会自动适配。
 - 前端 `REACT_APP_URL` 取 `localhost:8000/api`（不带协议），代码会拼接 `http://`；WS 地址另行硬编码。
 - Kubernetes 清单缺少 fanout；Go 测试通过不代表部署具备完整聊天链路。

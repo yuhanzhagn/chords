@@ -11,6 +11,7 @@ type ChatRoomRepo interface {
 	GetByName(name string) (*model.ChatRoom, error)
 	GetAll() ([]model.ChatRoom, error)
 	Delete(id uint) error
+	DeleteOwned(id, creatorID uint) (int64, error)
 	SearchByName(keyword string) ([]model.ChatRoom, error)
 	ExistsByID(id uint) (bool, error)
 }
@@ -72,4 +73,10 @@ func (r *chatRoomRepo) ExistsByID(id uint) (bool, error) {
 		Where("id = ?", id).
 		Scan(&exists).Error
 	return exists, err
+}
+
+// DeleteOwned keeps the ownership condition on the write, even after a prior read.
+func (r *chatRoomRepo) DeleteOwned(id, creatorID uint) (int64, error) {
+	result := r.db.Where("id = ? AND creator_id = ? AND creator_id <> 0", id, creatorID).Delete(&model.ChatRoom{})
+	return result.RowsAffected, result.Error
 }

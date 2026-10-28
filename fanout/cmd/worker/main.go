@@ -39,7 +39,10 @@ func main() {
 	})
 
 	httpClient := &http.Client{Timeout: cfg.Fanout.RequestTimeout}
-	dispatcher := fanout.NewDispatcher(reg, httpClient, fanout.Config{GatewayPath: cfg.Fanout.GatewayPath})
+	dispatcher, err := fanout.NewDispatcher(reg, httpClient, fanout.Config{GatewayPath: cfg.Fanout.GatewayPath, Token: cfg.Fanout.Token})
+	if err != nil {
+		log.Fatalf("failed to build dispatcher: %v", err)
+	}
 
 	consumer, err := kafka.NewNotificationConsumer(
 		cfg.Kafka.Brokers,

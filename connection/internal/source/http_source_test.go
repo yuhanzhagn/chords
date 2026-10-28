@@ -69,11 +69,13 @@ func TestFanoutHTTPSource_ServeHTTP_MethodNotAllowed(t *testing.T) {
 	// Arrange
 	codecMock := &mockEventCodec{}
 	hub := newTestHub(t, codecMock)
-	source := NewFanoutHTTPHandler(hub, ":0")
+	source, err := NewFanoutHTTPHandler(hub, ":0", testFanoutToken)
+	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodGet, "/fanout", nil)
 	recorder := httptest.NewRecorder()
 
 	// Act
+	req.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
 	source.ServeHTTP(recorder, req)
 
 	// Assert
@@ -86,11 +88,13 @@ func TestFanoutHTTPSource_ServeHTTP_InvalidJSON(t *testing.T) {
 	// Arrange
 	codecMock := &mockEventCodec{}
 	hub := newTestHub(t, codecMock)
-	source := NewFanoutHTTPHandler(hub, ":0")
+	source, err := NewFanoutHTTPHandler(hub, ":0", testFanoutToken)
+	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, "/fanout", bytes.NewBufferString("{"))
 	recorder := httptest.NewRecorder()
 
 	// Act
+	req.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
 	source.ServeHTTP(recorder, req)
 
 	// Assert
@@ -102,13 +106,15 @@ func TestFanoutHTTPSource_ServeHTTP_MissingEvent(t *testing.T) {
 	// Arrange
 	codecMock := &mockEventCodec{}
 	hub := newTestHub(t, codecMock)
-	source := NewFanoutHTTPHandler(hub, ":0")
+	source, err := NewFanoutHTTPHandler(hub, ":0", testFanoutToken)
+	require.NoError(t, err)
 	payload, err := json.Marshal(FanoutRequest{RoomID: 1, UserIDs: []uint32{2}})
 	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, "/fanout", bytes.NewBuffer(payload))
 	recorder := httptest.NewRecorder()
 
 	// Act
+	req.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
 	source.ServeHTTP(recorder, req)
 
 	// Assert
@@ -124,7 +130,8 @@ func TestFanoutHTTPSource_ServeHTTP_BroadcastsToRoom(t *testing.T) {
 	client := newClient(10)
 	hub.AddClient(client)
 	hub.AddClientToGroup(client.ID, 7)
-	source := NewFanoutHTTPHandler(hub, ":0")
+	source, err := NewFanoutHTTPHandler(hub, ":0", testFanoutToken)
+	require.NoError(t, err)
 
 	event := &kafkapb.KafkaEvent{RoomId: 7, MsgType: "message"}
 	payload, err := json.Marshal(FanoutRequest{RoomID: 7, Event: event})
@@ -133,6 +140,7 @@ func TestFanoutHTTPSource_ServeHTTP_BroadcastsToRoom(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	// Act
+	q.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
 	source.ServeHTTP(recorder, q)
 
 	// Assert
@@ -155,7 +163,8 @@ func TestFanoutHTTPSource_ServeHTTP_SendsToUsers(t *testing.T) {
 	clientB := newClient(200)
 	hub.AddClient(clientA)
 	hub.AddClient(clientB)
-	source := NewFanoutHTTPHandler(hub, ":0")
+	source, err := NewFanoutHTTPHandler(hub, ":0", testFanoutToken)
+	require.NoError(t, err)
 
 	event := &kafkapb.KafkaEvent{RoomId: 0, MsgType: "message"}
 	payload, err := json.Marshal(FanoutRequest{UserIDs: []uint32{100, 200}, Event: event})
@@ -164,6 +173,7 @@ func TestFanoutHTTPSource_ServeHTTP_SendsToUsers(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	// Act
+	q.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
 	source.ServeHTTP(recorder, q)
 
 	// Assert
@@ -217,4 +227,60 @@ func TestApplyFanout_EncodeError(t *testing.T) {
 	// Assert
 	assert.EqualError(t, err, "failed to encode event")
 	codecMock.AssertNumberOfCalls(t, "Encode", 1)
+}
+
+func TestFanoutRejectsUntrustedCallerBeforeBody(t *testing.T) {
+	for _, token := range []string{"", "wrong-service-token", "Bearer access-jwt", "command-jwt"} {
+		t.Run(token, func(t *testing.T) {
+			codecMock := &mockEventCodec{}
+			source, err := NewFanoutHTTPHandler(newTestHub(t, codecMock), ":0", testFanoutToken)
+			require.NoError(t, err)
+			body := &unreadableBody{t: t}
+			req := httptest.NewRequest(http.MethodPost, "/fanout", body)
+			req.Header.Set("X-Chords-Fanout-Token", token)
+			recorder := httptest.NewRecorder()
+			source.ServeHTTP(recorder, req)
+			require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			codecMock.AssertNotCalled(t, "Encode", mock.Anything)
+		})
+	}
+}
+
+type unreadableBody struct{ t *testing.T }
+
+func (b *unreadableBody) Read([]byte) (int, error) {
+	b.t.Error("unauthenticated body must not be read")
+	return 0, errors.New("unexpected read")
+}
+
+const testFanoutToken = "isolated-fanout-test-credential-32-bytes"
+
+func TestFanoutConstructionFailsClosed(t *testing.T) {
+	for _, token := range []string{"", "short", testFanoutToken + "\n"} {
+		_, err := NewFanoutHTTPHandler(nil, ":0", token)
+		require.Error(t, err)
+	}
+	// A bypassed constructor cannot accidentally enable anonymous access.
+	zero := &FanoutHTTPSource{}
+	recorder := httptest.NewRecorder()
+	zero.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/fanout", &unreadableBody{t: t}))
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+}
+
+func TestFanoutRejectsUserAuthorizationAndDuplicateServiceHeaders(t *testing.T) {
+	s, err := NewFanoutHTTPHandler(nil, ":0", testFanoutToken)
+	require.NoError(t, err)
+	for _, bearer := range []string{"access-jwt", "command-jwt"} {
+		req := httptest.NewRequest(http.MethodPost, "/fanout", &unreadableBody{t: t})
+		req.Header.Set("Authorization", "Bearer "+bearer)
+		recorder := httptest.NewRecorder()
+		s.ServeHTTP(recorder, req)
+		require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/fanout", &unreadableBody{t: t})
+	req.Header.Add("X-Chords-Fanout-Token", testFanoutToken)
+	req.Header.Add("X-Chords-Fanout-Token", testFanoutToken)
+	recorder := httptest.NewRecorder()
+	s.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 }

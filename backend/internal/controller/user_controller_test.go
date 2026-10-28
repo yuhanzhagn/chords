@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"backend/internal/controller"
+	"backend/internal/dto"
 	"backend/internal/model"
 )
 
@@ -24,7 +25,7 @@ func TestUserController_CreateUser_Success(t *testing.T) {
 	controller := &controller.UserController{Service: mockService}
 
 	user := model.User{Username: "john", Email: "john@example.com", Password: "secret"}
-	body, _ := json.Marshal(user)
+	body, _ := json.Marshal(dto.CreateUserRequest{Username: user.Username, Email: user.Email, Password: user.Password})
 
 	mockService.On("CreateUser", mock.AnythingOfType("*model.User")).Return(nil).Once()
 
@@ -67,7 +68,7 @@ func TestUserController_CreateUser_ServiceError(t *testing.T) {
 	controller := &controller.UserController{Service: mockService}
 
 	user := model.User{Username: "john", Email: "john@example.com", Password: "secret"}
-	body, _ := json.Marshal(user)
+	body, _ := json.Marshal(dto.CreateUserRequest{Username: user.Username, Email: user.Email, Password: user.Password})
 
 	mockService.On("CreateUser", mock.AnythingOfType("*model.User")).Return(errors.New("db error")).Once()
 

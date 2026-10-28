@@ -15,7 +15,7 @@ interface ChatWindowProps {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => boolean | void;
   onLoadMore: () => void;
 }
 
@@ -30,8 +30,7 @@ const ChatWindow = ({ chatroom, messages, loading, loadingMore, hasMore, onSendM
     e.preventDefault();
     if (!draft.trim()) return;
 
-    onSendMessage(draft.trim());
-    setDraft("");
+    if (onSendMessage(draft.trim()) !== false) setDraft("");
   };
 
   if (!chatroom) {

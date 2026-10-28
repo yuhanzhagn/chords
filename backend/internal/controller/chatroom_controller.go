@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
+	"backend/internal/identity"
 	"backend/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -27,9 +29,9 @@ func (c *ChatRoomController) CreateChatRoom(ctx *gin.Context) {
 		return
 	}
 
-	chatRoom, err := c.chatRoomService.CreateChatRoom(req.Name)
+	chatRoom, err := c.chatRoomService.CreateChatRoom(identity.FromContext(ctx.Request.Context()), req.Name)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(serviceStatus(err, http.StatusBadRequest), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -49,8 +51,8 @@ func (c *ChatRoomController) GetAllChatRooms(ctx *gin.Context) {
 // GET /chatrooms/:id
 func (c *ChatRoomController) GetChatRoomByID(ctx *gin.Context) {
 	idParam := ctx.Param("id")
-	id, err := strconv.Atoi(idParam)
-	if err != nil {
+	id, err := strconv.ParseUint(idParam, 10, strconv.IntSize)
+	if err != nil || id == 0 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
@@ -67,14 +69,18 @@ func (c *ChatRoomController) GetChatRoomByID(ctx *gin.Context) {
 // DELETE /chatrooms/:id
 func (c *ChatRoomController) DeleteChatRoom(ctx *gin.Context) {
 	idParam := ctx.Param("id")
-	id, err := strconv.Atoi(idParam)
-	if err != nil {
+	id, err := strconv.ParseUint(idParam, 10, strconv.IntSize)
+	if err != nil || id == 0 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	if err := c.chatRoomService.DeleteChatRoom(uint(id)); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := c.chatRoomService.DeleteChatRoom(identity.FromContext(ctx.Request.Context()), uint(id)); err != nil {
+		status := serviceStatus(err, http.StatusInternalServerError)
+		if errors.Is(err, service.ErrChatRoomNotFound) {
+			status = http.StatusNotFound
+		}
+		ctx.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 

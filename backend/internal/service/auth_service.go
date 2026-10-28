@@ -1,7 +1,9 @@
 package service
 
 import (
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"time"
 
 	"backend/internal/cache"
@@ -12,8 +14,9 @@ import (
 )
 
 type authService struct {
-	repos *repo.RepoContainer
-	cache cache.Cache[BlockEntry]
+	repos      *repo.RepoContainer
+	cache      cache.Cache[BlockEntry]
+	issueToken func(string, string) (string, string, time.Time, error)
 }
 
 type BlockEntry struct {
@@ -35,17 +38,11 @@ type AuthService interface {
 }
 
 func NewAuthService(repos *repo.RepoContainer, c cache.Cache[BlockEntry]) AuthService {
-	return &authService{repos: repos, cache: c}
+	return &authService{repos: repos, cache: c, issueToken: utils.GenerateJWT}
 }
 
 func (s *authService) Register(user *model.User) error {
-	if user == nil {
-		return errors.New("user cannot be nil")
-	}
-	if user.Username == "" {
-		return errors.New("user name is required")
-	}
-	return s.repos.User.Create(user)
+	return createUser(s.repos, user)
 }
 
 func (s *authService) Login(username, password string) (uint, string, string, string, error) {
@@ -69,12 +66,12 @@ func (s *authService) Login(username, password string) (uint, string, string, st
 		ExpiresAt:  time.Now().Add(7 * 24 * time.Hour),
 	}
 
-	if err := s.repos.UserSession.Create(&session); err != nil {
+	// Sign before changing persisted session state.
+	token, jti, _, err := s.issueToken(user.Username, session.SessionID)
+	if err != nil {
 		return 0, "", "", "", err
 	}
-
-	token, jti, _, err := utils.GenerateJWT(user.Username, session.SessionID)
-	if err != nil {
+	if err := s.repos.UserSession.ReplaceActive(&session); err != nil {
 		return 0, "", "", "", err
 	}
 
@@ -103,8 +100,7 @@ func (s *authService) Logout(tokenStr string) error {
 	if err != nil {
 		return err
 	}
-	s.ForceLogoutAll(userID)
-	return nil
+	return s.ForceLogoutOne(userID, claims.SessionID)
 }
 
 func (s *authService) ValidateJWT(tokenStr string) (*model.User, *model.UserSession, error) {
@@ -116,18 +112,27 @@ func (s *authService) ValidateJWT(tokenStr string) (*model.User, *model.UserSess
 	username := claims.Username
 	userID, err := s.GetUserIDByUsername(username)
 	if err != nil {
-		return nil, nil, errors.New("username is invalid")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, errors.New("username is invalid")
+		}
+		return nil, nil, fmt.Errorf("%w: %w", ErrAuthenticationUnavailable, err)
 	}
 	sessionID := claims.SessionID
 
 	session, err := s.repos.UserSession.FindValidSession(sessionID, userID)
 	if err != nil {
-		return nil, nil, errors.New("session invalid or revoked")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, errors.New("session invalid or revoked")
+		}
+		return nil, nil, fmt.Errorf("%w: %w", ErrAuthenticationUnavailable, err)
 	}
 
 	user, err := s.repos.User.GetByID(userID)
 	if err != nil {
-		return nil, nil, errors.New("user not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, errors.New("user not found")
+		}
+		return nil, nil, fmt.Errorf("%w: %w", ErrAuthenticationUnavailable, err)
 	}
 
 	return user, session, nil
@@ -159,18 +164,7 @@ func (s *authService) Clean(jti string) {
 	}()
 }
 
-func generateSessionID() string {
-	return time.Now().Format("20060102150405") + "-" + RandomString(8)
-}
-
-func RandomString(n int) string {
-	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
-	}
-	return string(b)
-}
+func generateSessionID() string { return rand.Text() }
 
 func (s *authService) GetUserIDByUsername(username string) (uint, error) {
 	user, err := s.repos.User.GetByUsername(username)
