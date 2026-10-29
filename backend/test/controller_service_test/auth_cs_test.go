@@ -19,9 +19,9 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
+	"backend/internal/app"
 	"backend/internal/cache"
 	"backend/internal/controller"
-	"backend/internal/model"
 	"backend/internal/repo"
 	"backend/internal/service"
 
@@ -37,7 +37,7 @@ func setupTestDB() *gorm.DB {
 	//assert.NoError(t, err, "failed to connect database")
 
 	// Migrate schema
-	_ = db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Message{}, &model.ChatRoom{}, &model.UserChatRoom{})
+	_ = app.InitDB(db)
 	//assert.NoError(t, err, "failed to migrate database")
 
 	return db

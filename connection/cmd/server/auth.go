@@ -67,7 +67,13 @@ func (a *backendAuthorizer) authorize(ctx context.Context, token string, roomID 
 	}
 	return grant, nil
 }
+func (a *backendAuthorizer) legacyAuthenticator(next handler.HandlerFunc) gateway.Authenticator {
+	return a.buildAuthenticator(next, false)
+}
 func (a *backendAuthorizer) authenticator(next handler.HandlerFunc) gateway.Authenticator {
+	return a.buildAuthenticator(next, true)
+}
+func (a *backendAuthorizer) buildAuthenticator(next handler.HandlerFunc, synchronous bool) gateway.Authenticator {
 	limit := middlewares.ConnectionRateLimitMiddleware(middlewares.ConnectionRateLimitOptions{RatePerSecond: 20, Burst: 40, IdleTTL: 5 * time.Minute})
 	return func(ctx context.Context, raw []byte) (gateway.AuthenticatedSession, error) {
 		var frame struct {
@@ -115,6 +121,17 @@ func (a *backendAuthorizer) authenticator(next handler.HandlerFunc) gateway.Auth
 					return gateway.ErrPolicyViolation
 				}
 				event.UserId = principal.UserID
+				if event.MsgType == "message" {
+					if err := kafkapb.ValidateSend(event); err != nil {
+						if errors.Is(err, kafkapb.ErrMessageTooLarge) {
+							return gateway.ErrMessageTooLarge
+						}
+						return gateway.ErrPolicyViolation
+					}
+				}
+				if synchronous && event.MsgType == "message" {
+					return a.accept(c, frame.Token, event)
+				}
 				raw, err := proto.Marshal(event)
 				if err != nil {
 					return gateway.ErrPolicyViolation
@@ -130,6 +147,9 @@ func (a *backendAuthorizer) authenticator(next handler.HandlerFunc) gateway.Auth
 				if event.MsgType == "message" && grant.CommandToken == "" {
 					return gateway.ErrPolicyViolation
 				}
+				if len(grant.CommandToken) > kafkapb.MaxCommandHeaderBytes {
+					return gateway.ErrMessageTooLarge
+				}
 				c.Context = kafkaadapter.WithCommandToken(c.Context, grant.CommandToken)
 				return next(c)
 			}),
@@ -137,5 +157,5 @@ func (a *backendAuthorizer) authenticator(next handler.HandlerFunc) gateway.Auth
 	}
 }
 func newBackendAuthorizer(url string) *backendAuthorizer {
-	return &backendAuthorizer{url: url, client: &http.Client{Timeout: 3 * time.Second}}
+	return &backendAuthorizer{url: url, client: &http.Client{Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }

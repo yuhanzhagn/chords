@@ -284,3 +284,33 @@ func TestFanoutRejectsUserAuthorizationAndDuplicateServiceHeaders(t *testing.T) 
 	s.ServeHTTP(recorder, req)
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 }
+
+func TestFanoutHTTPSourceOversizeIs413(t *testing.T) {
+	source, err := NewFanoutHTTPHandler(nil, ":0", testFanoutToken)
+	require.NoError(t, err)
+	req := httptest.NewRequest("POST", "/fanout", bytes.NewReader(bytes.Repeat([]byte(" "), maxFanoutBodyBytes+1)))
+	req.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
+	w := httptest.NewRecorder()
+	source.ServeHTTP(w, req)
+	require.Equal(t, 413, w.Code)
+}
+
+func TestFanoutHTTPBodyExactLimit(t *testing.T) {
+	c, err := codec.NewProtobufEventCodec(func() *kafkapb.KafkaEvent { return &kafkapb.KafkaEvent{} })
+	require.NoError(t, err)
+	source, err := NewFanoutHTTPHandler(newTestHub(t, c), ":0", testFanoutToken)
+	require.NoError(t, err)
+	prefix := []byte(`{"room_id":7,"event":{"room_id":7,"msg_type":"message"}}`)
+	for _, size := range []int{maxFanoutBodyBytes, maxFanoutBodyBytes + 1} {
+		body := append(bytes.Clone(prefix), bytes.Repeat([]byte(" "), size-len(prefix))...)
+		req := httptest.NewRequest("POST", "/fanout", bytes.NewReader(body))
+		req.Header.Set("X-Chords-Fanout-Token", testFanoutToken)
+		w := httptest.NewRecorder()
+		source.ServeHTTP(w, req)
+		if size == maxFanoutBodyBytes {
+			require.Equal(t, 204, w.Code)
+		} else {
+			require.Equal(t, 413, w.Code)
+		}
+	}
+}

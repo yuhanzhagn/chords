@@ -14,7 +14,7 @@ import (
 	kafkapb "connection/proto/kafka"
 )
 
-const maxFanoutBodyBytes = 1 << 20
+const maxFanoutBodyBytes = kafkapb.MaxTransportBytes
 
 type FanoutRequest struct {
 	RoomID  uint32              `json:"room_id"`
@@ -81,7 +81,7 @@ func (s *FanoutHTTPSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxFanoutBodyBytes))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxFanoutBodyBytes+1))
 	if err != nil {
 		http.Error(w, "failed to read request", http.StatusBadRequest)
 		return
@@ -91,6 +91,11 @@ func (s *FanoutHTTPSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[fanout-http] failed to close body: %v", err)
 		}
 	}()
+
+	if len(body) > maxFanoutBodyBytes {
+		http.Error(w, "message too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 
 	var req FanoutRequest
 	if err := json.Unmarshal(body, &req); err != nil {

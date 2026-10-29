@@ -9,13 +9,18 @@ import (
 )
 
 func InitDB(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := CheckMessageSchema(db); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(
 		&model.User{},
 		&model.ChatRoom{},
-		&model.Message{},
 		&model.UserSession{},
 		&model.UserChatRoom{},
-	)
+	); err != nil {
+		return err
+	}
+	return MigrateMessageSchema(db)
 }
 
 func ConnectDB(cfg *Config) (*gorm.DB, error) {

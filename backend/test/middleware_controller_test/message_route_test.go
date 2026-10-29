@@ -2,6 +2,7 @@ package middleware_controller
 
 import (
 	"backend/internal/identity"
+	"backend/internal/service"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -215,3 +216,12 @@ func (m *MockMessageService) GetMessagesPage(p identity.Principal, roomID uint, 
 	args := m.Called(p, roomID, beforeID, limit)
 	return args.Get(0).([]model.Message), args.Error(1)
 }
+
+func (m *MockMessageService) SendMessage(p identity.Principal, in service.SendInput) (*service.SendResult, error) {
+	msg, err := m.CreateMessage(p, in.UserID, in.RoomID, in.Content)
+	if err != nil {
+		return nil, err
+	}
+	return &service.SendResult{ID: msg.ID, UserID: msg.UserID, RoomID: msg.RoomID, Content: msg.Content, CreatedAt: msg.CreatedAt}, nil
+}
+func (m *MockMessageService) PublishPending(string, service.MessageProducer) error { return nil }

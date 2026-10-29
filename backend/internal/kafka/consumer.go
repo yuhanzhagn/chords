@@ -27,7 +27,7 @@ func NewWsOutboundConsumer(
 	handler func(event *kafkapb.KafkaEvent, commandToken string),
 ) (*WsOutboundConsumer, error) {
 
-	config := sarama.NewConfig()
+	config := brokerConfig()
 	config.Version = sarama.V2_8_0_0
 	config.Consumer.Offsets.AutoCommit.Enable = true
 	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
@@ -93,7 +93,7 @@ func (c *WsOutboundConsumer) Start(ctx context.Context) {
 	}
 
 	go func() {
-		for {
+		for ctx.Err() == nil {
 			if err := c.consumer.Consume(ctx, c.topics, handler); err != nil {
 				if errors.Is(err, context.Canceled) {
 					log.Println("[kafka] consumer stopped")
@@ -101,7 +101,11 @@ func (c *WsOutboundConsumer) Start(ctx context.Context) {
 				}
 				log.Println("[kafka] consume error:", err)
 			}
-
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
 		}
 	}()
 }

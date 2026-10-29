@@ -25,6 +25,8 @@ var (
 	maxMessageSize = int64(1 << 20)
 )
 
+var ErrMessageTooLarge = errors.New("message too large")
+
 var ErrPolicyViolation = errors.New("connection authorization rejected")
 var ErrAuthUnavailable = errors.New("authentication service unavailable")
 
@@ -184,13 +186,27 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 			ClientID:   c.ID,
 			Event:      InboundEvent[T]{ClientID: c.ID, Event: event},
 			ReceivedAt: time.Now(),
+			Reply: func(event any) error {
+				v, ok := event.(T)
+				if !ok {
+					return errors.New("invalid reply type")
+				}
+				raw, err := hub.Codec().Encode(v)
+				if err != nil {
+					return err
+				}
+				if !c.Enqueue(raw) {
+					return errors.New("reply queue unavailable")
+				}
+				return nil
+			},
 			Values: map[string]any{
 				handler.RequestContextKey: c.Conn.Request,
 			},
 		})
 		if err != nil {
 			log.Println("inbound handler rejected event")
-			if errors.Is(err, ErrPolicyViolation) || errors.Is(err, ErrAuthUnavailable) {
+			if errors.Is(err, ErrPolicyViolation) || errors.Is(err, ErrAuthUnavailable) || errors.Is(err, ErrMessageTooLarge) {
 				c.reject(err)
 				return
 			}
@@ -200,6 +216,7 @@ func readPump[T any](c *Client, hub *Hub[T]) {
 }
 
 func writePump(c *Client) {
+	defer c.Close()
 	ticker := time.NewTicker(pingPeriod)
 	authTicker := time.NewTicker(5 * time.Second)
 	defer authTicker.Stop()
@@ -245,11 +262,21 @@ func (c *Client) reject(err error) {
 	if errors.Is(err, ErrAuthUnavailable) {
 		code = websocket.CloseTryAgainLater
 	}
+	if errors.Is(err, ErrMessageTooLarge) {
+		code = websocket.CloseMessageTooBig
+	}
 	if c != nil && c.Conn != nil {
 		if ws, ok := c.Conn.Ws.(interface {
 			WriteControl(int, []byte, time.Time) error
 		}); ok {
-			_ = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, "authorization unavailable or rejected"), time.Now().Add(writeWait))
+			_ = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, closeReason(err)), time.Now().Add(writeWait))
 		}
 	}
+}
+
+func closeReason(err error) string {
+	if errors.Is(err, ErrMessageTooLarge) {
+		return "message too large"
+	}
+	return "authorization unavailable or rejected"
 }

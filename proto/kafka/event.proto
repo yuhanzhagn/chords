@@ -13,4 +13,9 @@ message KafkaEvent {
   bytes content = 5 [json_name = "Content"];
   string temp_id = 6 [json_name = "TempID"];
   int64 created_at = 7 [json_name = "CreateAt"];
+  string request_id = 8;
+  string event_id = 9;
+  uint64 server_message_id = 10;
+  string persisted_at = 11; // RFC3339Nano UTC; identical to the committed receipt.
+  uint64 room_seq = 12;
 }

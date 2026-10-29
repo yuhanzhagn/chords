@@ -17,6 +17,7 @@ type Client struct {
 	Conn              *Connection
 	SendChan          chan []byte
 	wsMsgType         int
+	sendMu            sync.RWMutex
 	closeOnce         sync.Once
 	closed            atomic.Bool
 }
@@ -25,6 +26,8 @@ func (c *Client) Close() {
 	if c == nil {
 		return
 	}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	c.closed.Store(true)
 	c.closeOnce.Do(func() {
 		if c.SendChan != nil {
@@ -34,6 +37,21 @@ func (c *Client) Close() {
 			_ = c.Conn.Ws.Close()
 		}
 	})
+}
+
+// Enqueue serializes channel sends with Close, including persisted replies.
+func (c *Client) Enqueue(msg []byte) bool {
+	c.sendMu.RLock()
+	defer c.sendMu.RUnlock()
+	if c.closed.Load() || c.SendChan == nil {
+		return false
+	}
+	select {
+	case c.SendChan <- msg:
+		return true
+	default:
+		return false
+	}
 }
 
 type EventRouter[T any] struct {
@@ -187,27 +205,11 @@ func (h *Hub[T]) sendToClient(client *Client, msg []byte, groupID uint32) {
 			return
 		}
 	}
-	if client.closed.Load() || client.SendChan == nil {
-		return
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("dropping closed client: client_id=%d", client.ID)
-			h.RemoveClient(client.ID)
-			client.Close()
-		}
-	}()
-	select {
-	case client.SendChan <- msg:
-	default:
-		if groupID == 0 {
-			log.Printf("dropping slow client: client_id=%d", client.ID)
-		} else {
-			log.Printf("dropping slow client: client_id=%d group_id=%d", client.ID, groupID)
-		}
+	if !client.Enqueue(msg) {
 		h.RemoveClient(client.ID)
 		client.Close()
 	}
+
 }
 
 func (h *Hub[T]) Codec() codec.EventCodec[T] {

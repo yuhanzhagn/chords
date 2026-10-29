@@ -44,7 +44,7 @@ func NewDispatcher(reg Registry, client *http.Client, cfg Config) (*Dispatcher, 
 
 type FanoutRequest struct {
 	RoomID  uint32              `json:"room_id"`
-	UserIDs []uint32            `json:"user_ids"`
+	UserIDs []uint32            `json:"user_ids,omitempty"`
 	Event   *kafkapb.KafkaEvent `json:"event"`
 }
 
@@ -90,6 +90,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *kafkapb.KafkaEvent) er
 }
 
 func (d *Dispatcher) send(ctx context.Context, addr string, userIDs []uint32, event *kafkapb.KafkaEvent) error {
+	if event.RoomId != 0 {
+		userIDs = nil
+	}
 	payload, err := json.Marshal(FanoutRequest{
 		RoomID:  event.RoomId,
 		UserIDs: userIDs,
@@ -97,6 +100,10 @@ func (d *Dispatcher) send(ctx context.Context, addr string, userIDs []uint32, ev
 	})
 	if err != nil {
 		return fmt.Errorf("marshal fanout request: %w", err)
+	}
+
+	if len(payload) > kafkapb.MaxTransportBytes {
+		return kafkapb.ErrMessageTooLarge
 	}
 
 	endpoint := d.gatewayURL(addr)

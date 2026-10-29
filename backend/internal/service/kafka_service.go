@@ -4,7 +4,6 @@ import (
 	"backend/internal/identity"
 	"backend/utils"
 	"log"
-	"time"
 
 	kafkapb "backend/proto/kafka"
 
@@ -30,6 +29,10 @@ func (s *KafkaService) HandleOutboundEvent(event *kafkapb.KafkaEvent, commandTok
 	if event == nil || event.MsgType != "message" {
 		return
 	}
+	if len(commandToken) > kafkapb.MaxCommandHeaderBytes || kafkapb.ValidateSend(event) != nil {
+		log.Println("rejected oversized or invalid command")
+		return
+	}
 	claims, err := utils.ParseCommand(commandToken)
 	if err != nil {
 		log.Println("rejected unauthorized command")
@@ -45,22 +48,15 @@ func (s *KafkaService) HandleOutboundEvent(event *kafkapb.KafkaEvent, commandTok
 }
 
 func (s *KafkaService) handleChatMessage(p identity.Principal, event *kafkapb.KafkaEvent) {
-	_, err := s.MessageService.CreateMessage(p, uint(event.UserId), uint(event.RoomId), string(event.Content))
+	result, err := s.MessageService.SendMessage(p, SendInput{UserID: uint(event.UserId), RoomID: uint(event.RoomId), Content: string(event.Content), RequestID: event.RequestId, TempID: event.TempId, ClientID: event.Id})
 	if err != nil {
-		log.Println("Error creating message:", err)
+		log.Println("message command rejected:", err)
 		return
 	}
-
-	s.HandleOutgoingMessage(event)
-}
-
-// HandleOutgoingMessage handles messages consumed from Kafka
-func (s *KafkaService) HandleOutgoingMessage(event *kafkapb.KafkaEvent) error {
-	event.CreatedAt = time.Now().Unix()
-	rawbyte, err := proto.Marshal(event)
-	if err != nil {
-		log.Println("Error marshaling event:", err)
-		return err
+	// Optional adapter producer for injected callers; production shares the service producer.
+	if !result.Deleted && s.Producer != nil {
+		if err := s.MessageService.PublishPending(result.EventID, s.Producer); err != nil {
+			log.Println("message persisted; outbox publish remains pending")
+		}
 	}
-	return s.Producer.Publish("notification", nil, rawbyte)
 }

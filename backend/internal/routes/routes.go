@@ -1,8 +1,6 @@
 package routes
 
 import (
-	"context"
-	"log"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -12,7 +10,6 @@ import (
 
 	"backend/internal/cache"
 	"backend/internal/controller"
-	"backend/internal/kafka"
 	"backend/internal/logrus"
 	"backend/internal/middleware/jwtauth"
 	"backend/internal/middleware/loadshedding"
@@ -101,24 +98,6 @@ func SetupUserRouter(r *gin.RouterGroup, userService service.UserService, authFu
 	}
 }
 
-func setupKafkaConsumer(kafkaService service.KafkaService) {
-	// Implement Kafka consumer setup here
-	consumer, err := kafka.NewWsOutboundConsumer(
-		[]string{"kafka:9092"},
-		"backend-ws-processor",
-		[]string{"user-request"},
-		kafkaService.HandleOutboundEvent,
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ctx, _ := context.WithCancel(context.Background())
-	// defer cancel()
-
-	consumer.Start(ctx)
-}
-
 func SetupRouter(db *gorm.DB, rds *redis.Client) *gin.Engine {
 	//r := gin.Default()
 	r := gin.New()
@@ -146,11 +125,6 @@ func SetupRouter(db *gorm.DB, rds *redis.Client) *gin.Engine {
 	membershipService := service.NewMembershipService(repos, redisCache)
 	messageService := service.NewMessageService(repos)
 
-	kafkaService := service.KafkaService{
-		Producer:       kafka.NewKafkaProducer([]string{"kafka:9092"}),
-		MessageService: messageService,
-	}
-	setupKafkaConsumer(kafkaService)
 	authFunc := jwtauth.NewAuthMiddleware(authService).Auth()
 	loadsheddingFunc := loadshedding.LoadShedding(20, 5, 100*time.Millisecond)
 

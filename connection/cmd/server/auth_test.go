@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -51,7 +53,7 @@ func TestWebSocketAuthenticationAndRevocation(t *testing.T) {
 		accepted <- inbound.Event
 		return nil
 	}
-	server := httptest.NewServer(WsHandler(hub, handlerFunc, newBackendAuthorizer(backend.URL).authenticator(handlerFunc)))
+	server := httptest.NewServer(WsHandler(hub, handlerFunc, newBackendAuthorizer(backend.URL).legacyAuthenticator(handlerFunc)))
 	defer server.Close()
 	dial := func() *websocket.Conn {
 		ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
@@ -139,7 +141,7 @@ func TestAuthenticatedHandlerFailsClosed(t *testing.T) {
 			}))
 			defer backend.Close()
 			called := false
-			auth, err := newBackendAuthorizer(backend.URL).authenticator(func(*handler.Context) error { called = true; return nil })(context.Background(), []byte(`{"type":"auth","token":"valid"}`))
+			auth, err := newBackendAuthorizer(backend.URL).legacyAuthenticator(func(*handler.Context) error { called = true; return nil })(context.Background(), []byte(`{"type":"auth","token":"valid"}`))
 			require.NoError(t, err)
 			if scenario == "offline" {
 				backend.Close()
@@ -185,7 +187,7 @@ func TestAuthenticatedMessageUsesProductionPipeline(t *testing.T) {
 	hub := newHub(newEventCodec("protobuf"))
 	messages := make(chan *kafkapb.KafkaEvent, 1)
 	next := setupHandlerChain(hub, eventSinkFunc(func(_ context.Context, e *kafkapb.KafkaEvent) error { messages <- e; return nil }), nil, "")
-	server := httptest.NewServer(newMux(hub, next, newBackendAuthorizer(backend.URL).authenticator(next)))
+	server := httptest.NewServer(newMux(hub, next, newBackendAuthorizer(backend.URL).legacyAuthenticator(next)))
 	defer server.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/ws", nil)
 	require.NoError(t, err)
@@ -215,4 +217,56 @@ func TestAuthenticatedMessageUsesProductionPipeline(t *testing.T) {
 	require.NoError(t, ws.SetReadDeadline(time.Now().Add(time.Second)))
 	_, _, err = ws.ReadMessage()
 	require.True(t, websocket.IsCloseError(err, 1013), "%v", err)
+}
+
+func TestSendAdmissionBeforeQueueAndSignatureCoversNewFields(t *testing.T) {
+	var messageAuthorizations atomic.Int32
+	var digest atomic.Value
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Kind   string `json:"kind"`
+			Digest string `json:"digest"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
+		if in.Kind == "message" {
+			messageAuthorizations.Add(1)
+			digest.Store(in.Digest)
+		}
+		_ = json.NewEncoder(w).Encode(authGrant{UserID: 42, Username: "alice", SessionID: "session", CommandToken: "grant"})
+	}))
+	defer backend.Close()
+	hub := newHub(newEventCodec("protobuf"))
+	messages := make(chan *kafkapb.KafkaEvent, 1)
+	next := setupHandlerChain(hub, eventSinkFunc(func(_ context.Context, e *kafkapb.KafkaEvent) error { messages <- e; return nil }), nil, "")
+	server := httptest.NewServer(newMux(hub, next, newBackendAuthorizer(backend.URL).legacyAuthenticator(next)))
+	defer server.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/ws", nil)
+	require.NoError(t, err)
+	defer ws.Close()
+	require.NoError(t, ws.WriteJSON(map[string]string{"type": "auth", "token": "valid"}))
+	var ready map[string]string
+	require.NoError(t, ws.ReadJSON(&ready))
+	input := &kafkapb.KafkaEvent{MsgType: "message", RoomId: 7, Content: []byte(strings.Repeat("x", kafkapb.MaxContentBytes)), RequestId: strings.Repeat("x", 128), TempId: strings.Repeat("\\", 128)}
+	raw, err := proto.Marshal(input)
+	require.NoError(t, err)
+	require.NoError(t, ws.WriteMessage(websocket.BinaryMessage, raw))
+	select {
+	case event := <-messages:
+		actual, err := proto.Marshal(event)
+		require.NoError(t, err)
+		hash := sha256.Sum256(actual)
+		require.Equal(t, hex.EncodeToString(hash[:]), digest.Load())
+		require.Equal(t, input.RequestId, event.RequestId)
+	case <-time.After(2 * time.Second):
+		t.Fatal("boundary message rejected")
+	}
+	input.Content = append(input.Content, 'x')
+	raw, err = proto.Marshal(input)
+	require.NoError(t, err)
+	require.NoError(t, ws.WriteMessage(websocket.BinaryMessage, raw))
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, _, err = ws.ReadMessage()
+	require.True(t, websocket.IsCloseError(err, 1009), "%v", err)
+	require.EqualValues(t, 1, messageAuthorizations.Load(), "oversize input must be rejected before command authorization and queueing")
+	require.Empty(t, messages)
 }

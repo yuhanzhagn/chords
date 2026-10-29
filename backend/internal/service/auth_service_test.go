@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"backend/internal/app"
 	"backend/internal/cache"
 	"backend/internal/model"
 	"backend/internal/repo"
@@ -21,7 +22,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	assert.NoError(t, err, "failed to connect database")
 
 	// Migrate schema
-	err = db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Message{}, &model.ChatRoom{}, &model.UserChatRoom{})
+	err = app.InitDB(db)
 	assert.NoError(t, err, "failed to migrate database")
 
 	return db

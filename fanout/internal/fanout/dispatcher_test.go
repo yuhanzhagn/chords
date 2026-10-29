@@ -1,9 +1,11 @@
 package fanout
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,7 +45,7 @@ func TestDispatcherSendsDedicatedCredentialAndPayload(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Error(err)
 		}
-		if req.RoomID != 7 || len(req.UserIDs) != 1 || req.UserIDs[0] != 42 || req.Event == nil || string(req.Event.Content) != "private" {
+		if req.RoomID != 7 || len(req.UserIDs) != 0 || req.Event == nil || string(req.Event.Content) != "private" {
 			t.Error("payload changed")
 		}
 		w.WriteHeader(204)
@@ -120,5 +122,94 @@ func TestDispatcherRejectsBadConstructionAndRegistryFailure(t *testing.T) {
 	}
 	if err = d.Dispatch(context.Background(), &kafkapb.KafkaEvent{RoomId: 7}); !errors.Is(err, expected) {
 		t.Fatal(err)
+	}
+}
+
+type manyUserRegistry struct {
+	users    []uint32
+	gateways map[uint32]string
+}
+
+func (r manyUserRegistry) RoomUsers(context.Context, uint32) ([]uint32, error) { return r.users, nil }
+func (r manyUserRegistry) UserGateways(context.Context, []uint32) (map[uint32]string, error) {
+	return r.gateways, nil
+}
+
+func TestRoomBroadcastOneBoundedRequestPerSelectedGateway(t *testing.T) {
+	var calls [2]atomic.Int32
+	servers := make([]*httptest.Server, 2)
+	for i := range servers {
+		index := i
+		servers[i] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls[index].Add(1)
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			if len(raw) > kafkapb.MaxTransportBytes {
+				t.Error("unbounded envelope")
+			}
+			var req FanoutRequest
+			if err := json.Unmarshal(raw, &req); err != nil {
+				t.Error(err)
+			}
+			if len(req.UserIDs) != 0 || bytes.Contains(raw, []byte("user_ids")) || req.RoomID != 7 {
+				t.Error("room broadcast payload must omit recipients")
+			}
+			if req.Event == nil || len(req.Event.Content) != kafkapb.MaxContentBytes {
+				t.Error("event changed")
+			}
+			w.WriteHeader(204)
+		}))
+		defer servers[i].Close()
+	}
+	users := make([]uint32, 100001)
+	gateways := make(map[uint32]string, len(users))
+	for i := range users {
+		users[i] = uint32(4000000000 + i)
+		if i < len(users)-1 {
+			gateways[users[i]] = servers[i%2].URL
+		}
+	}
+	d, err := NewDispatcher(manyUserRegistry{users, gateways}, http.DefaultClient, Config{Token: testToken})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Dispatch(context.Background(), &kafkapb.KafkaEvent{RoomId: 7, Content: bytes.Repeat([]byte("x"), kafkapb.MaxContentBytes)}); err != nil {
+		t.Fatal(err)
+	}
+	for i := range calls {
+		if calls[i].Load() != 1 {
+			t.Fatal("each selected gateway must receive exactly one room broadcast")
+		}
+	}
+}
+
+func TestFallbackRetainsRecipientsAndFinalBodyIsBounded(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		var req FanoutRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Error(err)
+		}
+		if req.RoomID != 0 || len(req.UserIDs) != 1 || req.UserIDs[0] != 42 {
+			t.Error("fallback changed")
+		}
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+	d, err := NewDispatcher(fakeRegistry{addr: server.URL}, server.Client(), Config{Token: testToken})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Dispatch(context.Background(), &kafkapb.KafkaEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Dispatch(context.Background(), &kafkapb.KafkaEvent{RoomId: 7, Content: bytes.Repeat([]byte("x"), kafkapb.MaxTransportBytes)}); !errors.Is(err, kafkapb.ErrMessageTooLarge) {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatal("oversize envelope sent")
 	}
 }

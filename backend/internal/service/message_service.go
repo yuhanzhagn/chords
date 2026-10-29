@@ -6,17 +6,25 @@ import (
 	"backend/internal/repo"
 	"errors"
 	"gorm.io/gorm"
+	"strconv"
 )
 
 type messageService struct {
-	repos *repo.RepoContainer
+	repos    *repo.RepoContainer
+	producer MessageProducer
 }
 
-func NewMessageService(repos *repo.RepoContainer) *messageService {
-	return &messageService{repos: repos}
+func NewMessageService(repos *repo.RepoContainer, producers ...MessageProducer) *messageService {
+	s := &messageService{repos: repos}
+	if len(producers) > 0 {
+		s.producer = producers[0]
+	}
+	return s
 }
 
 type MessageService interface {
+	SendMessage(p identity.Principal, in SendInput) (*SendResult, error)
+	PublishPending(eventID string, producer MessageProducer) error
 	CreateMessage(p identity.Principal, userID, roomID uint, content string) (*model.Message, error)
 	GetMessagesByChatRoom(p identity.Principal, chatRoomID uint) ([]model.Message, error)
 	DeleteMessage(p identity.Principal, id uint) error
@@ -25,30 +33,18 @@ type MessageService interface {
 }
 
 func (s *messageService) CreateMessage(p identity.Principal, userID, roomID uint, content string) (*model.Message, error) {
-	if userID != p.UserID() {
-		return nil, ErrForbidden
-	}
-	if err := requireMember(s.repos, p, roomID); err != nil {
+	result, err := s.SendMessage(p, SendInput{UserID: userID, RoomID: roomID, Content: content})
+	if err != nil {
 		return nil, err
 	}
-	msg := &model.Message{
-		Content: content,
-		UserID:  userID,
-		RoomID:  roomID,
-	}
-
-	if err := s.repos.Message.Create(msg); err != nil {
-		return nil, err
-	}
-
-	return msg, nil
+	return &model.Message{ID: result.ID, UserID: result.UserID, RoomID: result.RoomID, Content: result.Content, CreatedAt: result.CreatedAt, RoomSeq: mustRoomSeq(result.RoomSeq)}, nil
 }
 
 func (s *messageService) GetMessagesByChatRoom(p identity.Principal, chatRoomID uint) ([]model.Message, error) {
 	if err := requireMember(s.repos, p, chatRoomID); err != nil {
 		return nil, err
 	}
-	return s.repos.Message.GetByRoomID(chatRoomID)
+	return s.repos.Message.GetByRoomIDBeforeWithLimit(chatRoomID, 0, 100)
 }
 
 func (s *messageService) DeleteMessage(p identity.Principal, id uint) error {
@@ -82,6 +78,9 @@ func (s *messageService) GetMessagesWithLimit(p identity.Principal, roomID uint,
 	if err := requireMember(s.repos, p, roomID); err != nil {
 		return nil, err
 	}
+	if limit < 1 || limit > 100 {
+		return nil, ErrInvalidCursor
+	}
 	return s.repos.Message.GetByRoomIDWithLimit(roomID, limit)
 }
 
@@ -89,5 +88,10 @@ func (s *messageService) GetMessagesPage(p identity.Principal, roomID uint, befo
 	if err := requireMember(s.repos, p, roomID); err != nil {
 		return nil, err
 	}
+	if limit < 1 || limit > 100 {
+		return nil, ErrInvalidCursor
+	}
 	return s.repos.Message.GetByRoomIDBeforeWithLimit(roomID, beforeID, limit)
 }
+
+func mustRoomSeq(s string) uint64 { n, _ := strconv.ParseUint(s, 10, 63); return n }

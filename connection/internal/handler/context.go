@@ -11,5 +11,6 @@ type Context struct {
 	ClientID   uint32
 	Event      any
 	ReceivedAt time.Time
+	Reply      func(any) error
 	Values     map[string]any
 }

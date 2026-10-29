@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ChatSidebar from "./ChatSidebar";
 import ChatWindow from "./ChatWindow";
 import { useChatrooms } from "../../hooks/useChatrooms";
@@ -30,24 +30,37 @@ export default function ChatRoom() {
 
   const handleSocketMessage = useCallback(
     (payload: KafkaEvent) => {
-      if (payload.msgType === "message") {
-        console.log("Received message event:", payload);
+      if (["message","persisted"].includes(payload.msgType)) {
         msgStore.confirm({
-          ID: payload.id,
+          ID: payload.serverMessageId !== "0" ? payload.serverMessageId : payload.id,
           UserID: payload.userId,
           RoomID: payload.roomId,
           Content: new TextDecoder().decode(payload.content),
-          CreatedAt: toIsoTime(payload.createdAt),
+          CreatedAt: payload.persistedAt || toIsoTime(payload.createdAt),
+          EventID: payload.eventId,
+          RoomSeq: payload.roomSeq,
+          RequestID: payload.requestId,
           TempID: payload.tempId,
           status: "sent",
           fromself: payload.userId === user?.id,
         });
       }
+      if(payload.msgType === "pending_restore") msgStore.add({ID:payload.tempId || payload.requestId,UserID:payload.userId,RoomID:payload.roomId,Content:new TextDecoder().decode(payload.content),CreatedAt:toIsoTime(payload.createdAt),TempID:payload.tempId,RequestID:payload.requestId,status:"pending",fromself:true});
+
+      if (payload.msgType === "deleted") { msgStore.remove(payload.requestId); msgStore.refresh(); }
+      if (["send_error", "send_unknown", "send_cancelled"].includes(payload.msgType)) {
+        const unknown = payload.msgType !== "send_error" || JSON.parse(new TextDecoder().decode(payload.content)).outcome === "unknown";
+        msgStore.add({ID:payload.tempId,UserID:payload.userId,RoomID:payload.roomId,Content:"",CreatedAt:"",TempID:payload.tempId,RequestID:payload.requestId,WaitingCanceled:payload.msgType==="send_cancelled",status:unknown?"unknown":"failed",fromself:payload.userId===user?.id});
+      }
+
     },
     [msgStore, user?.id]
   );
 
-  const socket = useChatSocket(user, token, handleSocketMessage);
+  const socket = useChatSocket(user, token, handleSocketMessage, msgStore.refresh);
+
+  const restorePending = socket.restorePending;
+  useEffect(()=>{ if(room?.ID) restorePending(room.ID); },[room?.ID,restorePending,token]);
 
   async function selectRoom(r: any) {
     if (!user) return;
@@ -61,7 +74,7 @@ export default function ChatRoom() {
     if (!room || !user) return false;
     const id = (BigInt(user.id) * 10_000_000_000_000n + BigInt(Date.now())).toString();
 
-    const sent = socket.send({
+    const payload = KafkaEvent.fromPartial({
       id: id,
       msgType: "message",
       roomId: room.ID,
@@ -71,7 +84,7 @@ export default function ChatRoom() {
       createdAt: String(Date.now()),
     });
 
-    if (!sent) return false;
+    if (!socket.send(payload)) return false;
     msgStore.add({
       ID: id,
       UserID: user.id,
@@ -79,6 +92,7 @@ export default function ChatRoom() {
       Content: text,
       CreatedAt: new Date().toISOString(),
       TempID: id,
+      RequestID: payload.requestId,
       status: "pending",
       fromself: true,
     });
@@ -87,7 +101,8 @@ export default function ChatRoom() {
 
   return (
     <Card className="overflow-hidden border-border/70 bg-card/95">
-      {socket.error && <p role="alert" className="px-4 py-2 text-sm text-destructive">{socket.error}</p>}
+      {(socket.error || msgStore.error) && <p role="alert" className="px-4 py-2 text-sm text-destructive">{socket.error || msgStore.error}</p>}
+      {msgStore.messages.some(m => m.fromself && !m.WaitingCanceled && (m.status === "pending" || m.status === "unknown")) && <div className="px-4 py-2 text-sm"><button onClick={socket.retryPending}>Retry pending messages</button>{" · "}<button onClick={socket.cancelPending}>Cancel waiting</button><span> (canceling does not undo a persisted message)</span></div>}
       <div className="grid h-[70vh] grid-cols-1 lg:grid-cols-[280px_1fr]">
         <ChatSidebar
           chatrooms={chatrooms}

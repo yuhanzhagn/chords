@@ -83,7 +83,7 @@ const MessageList = ({ messages, loading, loadingMore, hasMore, onLoadMore }: Me
 
           return (
             <article
-              key={msg.ID || msg.CreatedAt || msg.TempID}
+              key={msg.RequestID ? `${msg.UserID}/${msg.RequestID}` : `server/${msg.ID}`}
               className={cn(
                 "w-fit max-w-[70%] rounded-2xl border px-4 py-3 text-sm shadow-sm",
                 isSelf
@@ -96,7 +96,9 @@ const MessageList = ({ messages, loading, loadingMore, hasMore, onLoadMore }: Me
               <div className={cn("mb-1 flex items-center justify-between text-[11px]", isSelf ? "text-primary-foreground/80" : "text-muted-foreground")}>
                 <span className="font-semibold">{msg.UserID || "Anonymous"}</span>
                 <span>
-                  {isPending && "Sending… "}
+                  {isPending && "Awaiting persistence… "}
+                  {msg.status === "unknown" && (msg.WaitingCanceled ? "Waiting canceled · " : "Outcome unknown · ")}
+                  {isFailed && "Rejected · "}
                   {msg.CreatedAt ? new Date(msg.CreatedAt).toLocaleTimeString() : ''}
                 </span>
               </div>

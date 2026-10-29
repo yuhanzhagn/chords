@@ -8,7 +8,7 @@
 | backend JWT | 环境变量 JWT_SECRET | 必填、至少 32 字节；缺失/过短启动失败；HS256，access/command audience 分离 |
 | backend HTTP | [main](../backend/cmd/main.go) | 固定 :8080，YAML app.port/frontend.port 目前不控制监听地址 |
 | backend Redis | [redis.go](../backend/internal/redisdb/redis.go) | 硬编码 redis:6379、空密码、DB 0；启动保留状态 |
-| backend Kafka | [routes](../backend/internal/routes/routes.go)、[KafkaService](../backend/internal/service/kafka_service.go) | 硬编码 kafka:9092、user-request、notification、backend-ws-processor |
+| backend Kafka/relay | [runtime](../backend/internal/routes/message_runtime.go)、[producer](../backend/internal/kafka/producer.go) | CHORDS_KAFKA_BROKERS 默认 kafka:9092（逗号分隔）；notification；旧 user-request consumer 仅 CHORDS_LEGACY_COMMANDS=1 启用 |
 | connection | [YAML](../connection/configs/config.yaml)、[默认值](../connection/internal/app/config.go) | 从本模块目录读取 configs/config.yaml；没有通用 env override |
 | fanout | [YAML](../fanout/configs/config.yaml)、[默认值](../fanout/internal/app/config.go) | 从本模块目录读取；FANOUT_TOKEN 仅从环境读取 |
 | 内部 fanout 服务认证 | gateway 与 worker 的环境变量 FANOUT_TOKEN | 必填且两端相同，至少 32 字节、无空格的可见 ASCII；YAML token 不生效；无默认值，缺失/非法在 Kafka/Redis 前失败 |
@@ -41,14 +41,14 @@ Docker 服务名在 Docker 网络内解析；宿主机有端口映射不代表 K
 | auth.backend_url | http://app:8080；CHORDS_AUTH_BACKEND_URL 可覆盖（kind 使用 http://backend:8080） |
 | fanout.address / advertise_addr | :8082 / connection:8082 |
 | event.codec | protobuf；json 仅用于配套客户端，不适配当前浏览器主路径 |
-| kafka.brokers / inbound_topic | [kafka:9092] / user-request |
+| kafka.brokers / inbound_topic | [kafka:9092] / user-request；仅旧辅助 sink 使用，生产 WS 默认同步 HTTP 接纳 |
 | redis.addr / password / db | redis:6379 / 空 / 0 |
 | redis.room_users_prefix / suffix | room: / :users |
 | redis.user_gateway_prefix / suffix | user: / :gateway |
 | redis.room_users_ttl / user_gateway_ttl | 2m / 2m |
 | redis.presence_refresh_interval | 30s |
 
-0 值 TTL/刷新间隔会被 withDefaults 替换，不能通过填 0 禁用。前缀/后缀与 fanout 必须一致。切换 gateway codec 为 json 时，Kafka sink 也会采用该 codec，而 backend/fanout 固定 protobuf，整条链路会不兼容。
+0 值 TTL/刷新间隔会被 withDefaults 替换，不能通过填 0 禁用。前缀/后缀与 fanout 必须一致。生产 WS 不创建 Kafka sink；json codec 仅适配配套客户端。旧辅助 sink 若选 json 编码，仍与 backend/fanout 固定 protobuf 不兼容。
 
 ## Fanout 配置
 
@@ -64,7 +64,7 @@ Docker 服务名在 Docker 网络内解析；宿主机有端口映射不代表 K
 
 JWT 仅由 backend 签发与验签，密钥从 `JWT_SECRET` 读取，至少 32 字节。根 [.env.example](../.env.example) 只给占位字段；用 `openssl rand -hex 32` 在本地生成，设置 shell 环境或未跟踪的 `.env`，不要提交真实密钥。Compose app 将该变量传给 backend；kind 引用 `chords-auth` Secret。gateway 无需持有签名密钥，通过 backend 校验 session。
 
-发布此修改需前后端一起更新并重新登录：旧 token 缺少 `chords-access` audience，将被拒绝。修改密钥会使既有 token 和未消费命令授权失效。`auth.backend_url` 必须是可信 HTTP(S) 服务地址；它接收 Authorization header，生产跨主机传输需 TLS。backend 调用超时 3 秒，失败关闭连接/拒绝授权，不使用永久缓存。connection/fanout 加载器不再打印配置结构；不要在 URL 加入凭据。
+发布此修改需前后端一起更新并重新登录：旧 token 缺少 `chords-access` audience，将被拒绝。修改密钥会使既有 token 和未消费命令授权失效。`auth.backend_url` 必须是可信 HTTP(S) 服务地址；它接收 Authorization header，生产跨主机传输需 TLS。backend 调用超时 3 秒，禁止 HTTP redirect；认证/订阅失败关闭或拒绝，发送接纳失败则返回结构化 send_error，5xx/网络失败保持 unknown 并复用请求 ID，不使用永久缓存。connection/fanout 加载器不再打印配置结构；不要在 URL 加入凭据。
 
 ## 内部服务凭据
 
@@ -73,3 +73,15 @@ JWT 仅由 backend 签发与验签，密钥从 `JWT_SECRET` 读取，至少 32 �
 worker 在 `X-Chords-Fanout-Token` 头中传递；gateway 用标准库 SHA-256 固定长度摘要与 constant-time 比较，在方法/body/解码/Hub 之前拒绝缺失/错误或重复凭据头。worker 禁止所有 HTTP redirect，仅 2xx 成功；HTTP 响应 body 不进入错误/日志。两端不一致时启动无法跨进程比较，实际推送返回 401。更换凭据需协调两端（当前只支持一个值，滚动切换可能暂时拒绝投递），现有 worker 失败仍标记消费，不能宣称切换无损。
 
 本地 Compose 使用 HTTP，凭据不防窃听或重放。跨不可信主机必须提供可信证书的 HTTPS 与受控网络；保持 Go 默认 TLS 验证，不设置 insecure skip。Redis 中的 gateway 地址、broker、内部网络仍需可信访问控制；此凭据不是 Kafka ACL 或多租户隔离方案。
+
+## 消息预算、relay 与 schema
+
+消息尺寸是三个 Go 消费者共用的协议常量，不是 YAML/env 选项：UTF-8 content 256 KiB，输入标识各 128 字节可见 ASCII，WS/HTTP fanout 1 MiB，command header 最大 4096 字节，Kafka record 预算 1,048,576 字节（Sarama 默认）。REST 完整 JSON body 上限 `6*256KiB+4096`（允许转义，内容仍单独限长）。来源 [admission.go](../proto/kafka/admission.go)，修改需同步生成并验证全部消费者；worker room body 不携带 user_ids，因此接收人数不影响 envelope。
+
+backend InitDB 使用显式 schema v2（0→1→2），真实启动前须按 [迁移说明](message-persistence.md) 备份/副本验证并取得数据操作授权；本轮仅临时库证据。后台 relay 默认每秒扫描 32 条、领取 30 秒、单 publish 5 秒，失败指数退避上限 64 秒；SQLite relay 操作 1 秒上下文/50ms busy cap。这些是 [构造器常量](../backend/internal/service/outbox_relay.go)，不是虚假的 YAML/env 选项。状态/失败分类持久记录在 outbox，可按 status/last_error/attempts/next_attempt/lease_until 只读聚合；没有自动清理或重试次数上限。
+
+Sarama lazy producer：连接 1 秒、读写 2 秒、metadata 2 秒且不做内部 metadata/producer 重试，ACK 请求 2 秒；relay 持久退避负责重试，取消后未完成操作至多受这些底层预算约束。停机取消 relay 后再关 producer（5 秒预算），pending 留待重启。backend SIGINT/SIGTERM 用 5 秒 HTTP Shutdown；gateway 整体 draining 仍待 S3。
+
+CHORDS_KAFKA_BROKERS 仅 backend 进程读取；gateway/fanout 仍使用自己的 YAML（gateway 默认同步消息不使用 Kafka 配置）。CHORDS_LEGACY_COMMANDS 默认关闭，设 1 才后台启动旧 consumer，创建失败 5 秒后重试；不延长 30 秒命令授权。根 .env.example 说明可选进程环境，使用容器时需自行显式转发；没有更改现有 Compose 部署配置。
+
+客户端固定每 15 秒、重连、聚焦/可见和通知触发历史对账；每批 10 页，更多页 1 秒后继续。pending 上限 128、自动发送上限 5 次，均为客户端常量；不持久化到 localStorage，不存凭据，不支持刷新后继续自动重发。手动重试保持 request_id，取消不撤销可能已提交的消息。

@@ -10,7 +10,11 @@ export interface ChatMessage {
   Content: string;
   CreatedAt: string;
   TempID: string;
-  status: "pending" | "sent" | "failed";
+  RequestID?: string;
+  EventID?: string;
+  RoomSeq?: string;
+  WaitingCanceled?: boolean;
+  status: "pending" | "sent" | "failed" | "unknown";
   fromself: boolean;
 }
 

@@ -19,3 +19,7 @@ go build -o /tmp/chords-fanout ./cmd/worker
 ```
 
 已有 standard-library HTTP/mock registry、配置与真实入口失败顺序行为测试；不连接真实 Kafka/Redis。`fanout/fanout` 是已跟踪历史二进制，普通构建使用临时路径；根 make fanout 供 Compose 演示使用。缺口见 [现状](../docs/status.md)。
+
+S2.1：registry 仍决定 gateway，非零 room_id 每网关每事件只 POST 一次，省略不参与过滤的 user_ids；禁止按用户分批后重复全房间广播。发送前检查实际 JSON/base64 body <=1 MiB。room_id=0 fallback 保留原 user/client ID 限制，不扩大语义。新的 request_id/event_id/server_message_id/persisted_at 原样经过 protobuf/HTTP；worker 尚无持久补发，不能以 backend pending Outbox 宣称最终 delivered。共享尺寸源 proto/kafka/admission.go 随生成脚本复制，三模块必须一致。
+
+S2.2–S2.4：backend relay保证持久事件至少一次发布，worker仍best-effort/失败推进；room_seq与其他元数据原样经过，不添加本地排序事实。客户端入房/重连/通知/聚焦/每15秒使用权威历史分页对账补齐，不能称fanout已送达。test/recoveryfixture用于隔离跨模块测试，仅替换Kafka传输/Redis registry，生产dispatcher/HTTP服务认证保持真实。

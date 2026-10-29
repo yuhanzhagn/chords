@@ -23,16 +23,21 @@ const (
 
 // KafkaEvent matches connection/internal/platform/kafka/event.go.
 type KafkaEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,json=ID,proto3" json:"id,omitempty"`
-	UserId        uint32                 `protobuf:"varint,2,opt,name=user_id,json=UserID,proto3" json:"user_id,omitempty"`
-	RoomId        uint32                 `protobuf:"varint,3,opt,name=room_id,json=RoomID,proto3" json:"room_id,omitempty"`
-	MsgType       string                 `protobuf:"bytes,4,opt,name=msg_type,json=MsgType,proto3" json:"msg_type,omitempty"`
-	Content       []byte                 `protobuf:"bytes,5,opt,name=content,json=Content,proto3" json:"content,omitempty"`
-	TempId        string                 `protobuf:"bytes,6,opt,name=temp_id,json=TempID,proto3" json:"temp_id,omitempty"`
-	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=CreateAt,proto3" json:"created_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              uint64                 `protobuf:"varint,1,opt,name=id,json=ID,proto3" json:"id,omitempty"`
+	UserId          uint32                 `protobuf:"varint,2,opt,name=user_id,json=UserID,proto3" json:"user_id,omitempty"`
+	RoomId          uint32                 `protobuf:"varint,3,opt,name=room_id,json=RoomID,proto3" json:"room_id,omitempty"`
+	MsgType         string                 `protobuf:"bytes,4,opt,name=msg_type,json=MsgType,proto3" json:"msg_type,omitempty"`
+	Content         []byte                 `protobuf:"bytes,5,opt,name=content,json=Content,proto3" json:"content,omitempty"`
+	TempId          string                 `protobuf:"bytes,6,opt,name=temp_id,json=TempID,proto3" json:"temp_id,omitempty"`
+	CreatedAt       int64                  `protobuf:"varint,7,opt,name=created_at,json=CreateAt,proto3" json:"created_at,omitempty"`
+	RequestId       string                 `protobuf:"bytes,8,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	EventId         string                 `protobuf:"bytes,9,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	ServerMessageId uint64                 `protobuf:"varint,10,opt,name=server_message_id,json=serverMessageId,proto3" json:"server_message_id,omitempty"`
+	PersistedAt     string                 `protobuf:"bytes,11,opt,name=persisted_at,json=persistedAt,proto3" json:"persisted_at,omitempty"` // RFC3339Nano UTC; identical to the committed receipt.
+	RoomSeq         uint64                 `protobuf:"varint,12,opt,name=room_seq,json=roomSeq,proto3" json:"room_seq,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *KafkaEvent) Reset() {
@@ -114,11 +119,46 @@ func (x *KafkaEvent) GetCreatedAt() int64 {
 	return 0
 }
 
+func (x *KafkaEvent) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *KafkaEvent) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *KafkaEvent) GetServerMessageId() uint64 {
+	if x != nil {
+		return x.ServerMessageId
+	}
+	return 0
+}
+
+func (x *KafkaEvent) GetPersistedAt() string {
+	if x != nil {
+		return x.PersistedAt
+	}
+	return ""
+}
+
+func (x *KafkaEvent) GetRoomSeq() uint64 {
+	if x != nil {
+		return x.RoomSeq
+	}
+	return 0
+}
+
 var File_proto_kafka_event_proto protoreflect.FileDescriptor
 
 const file_proto_kafka_event_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/kafka/event.proto\x12\bkafka.v1\"\xba\x01\n" +
+	"\x17proto/kafka/event.proto\x12\bkafka.v1\"\xde\x02\n" +
 	"\n" +
 	"KafkaEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02ID\x12\x17\n" +
@@ -128,7 +168,14 @@ const file_proto_kafka_event_proto_rawDesc = "" +
 	"\acontent\x18\x05 \x01(\fR\aContent\x12\x17\n" +
 	"\atemp_id\x18\x06 \x01(\tR\x06TempID\x12\x1c\n" +
 	"\n" +
-	"created_at\x18\a \x01(\x03R\bCreateAtB/Z-connection/internal/platform/kafka/pb;kafkapbb\x06proto3"
+	"created_at\x18\a \x01(\x03R\bCreateAt\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\b \x01(\tR\trequestId\x12\x19\n" +
+	"\bevent_id\x18\t \x01(\tR\aeventId\x12*\n" +
+	"\x11server_message_id\x18\n" +
+	" \x01(\x04R\x0fserverMessageId\x12!\n" +
+	"\fpersisted_at\x18\v \x01(\tR\vpersistedAt\x12\x19\n" +
+	"\broom_seq\x18\f \x01(\x04R\aroomSeqB/Z-connection/internal/platform/kafka/pb;kafkapbb\x06proto3"
 
 var (
 	file_proto_kafka_event_proto_rawDescOnce sync.Once

@@ -39,6 +39,7 @@ protoc -I . --plugin="protoc-gen-ts_proto=$ts_plugin" \
 for module in backend connection fanout; do
   mkdir -p "$output_root/$module/proto/kafka"
   cp "$staging_root/$module/proto/kafka/event.pb.go" "$output_root/$module/proto/kafka/event.pb.go"
+  cp "$repo_root/proto/kafka/admission.go" "$output_root/$module/proto/kafka/admission.go"
 done
 mkdir -p "$output_root/frontend/src/proto/kafka"
 cp "$staging_root/frontend/src/proto/kafka/event.ts" "$output_root/frontend/src/proto/kafka/event.ts"

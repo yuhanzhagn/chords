@@ -172,9 +172,6 @@ func main() {
 	eventCodec := newEventCodec(cfg.Event.Codec)
 	hub := newHub(eventCodec)
 
-	multiSink, closeSink := mustSetupMultiSink(cfg, eventCodec)
-	defer closeSink()
-
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Addr,
 		Password: cfg.Redis.Password,
@@ -201,7 +198,7 @@ func main() {
 	hub.SetDisconnectHandler(newDisconnectHandler(hub, reg))
 	startPresenceRefresher(reg, hub, cfg.Fanout.AdvertiseAddr, cfg.Redis.PresenceRefresh)
 
-	inboundHandler := setupHandlerChain(hub, multiSink, reg, cfg.Fanout.AdvertiseAddr)
+	inboundHandler := groupAssignmentHandler(hub, reg, cfg.Fanout.AdvertiseAddr)
 
 	mux := newMux(hub, inboundHandler, newBackendAuthorizer(cfg.Auth.BackendURL).authenticator(inboundHandler))
 	fanoutSource, err := source.NewFanoutHTTPHandler(hub, cfg.Fanout.Address, cfg.Fanout.Token)

@@ -42,7 +42,8 @@ make check-python         # Python 源码语法检查，不代表服务运行成
 
 - backend 启动不清 Redis；启动前必须提供至少 32 字节的 `JWT_SECRET`。常规测试使用隔离测试密钥，无需启动服务。
 - WS 首帧认证由 backend 校验 session，身份固定；历史、发送、订阅仅成员可用。Kafka 入站需短效命令授权 header；协议与未决权限见 `docs/contracts.md`、ADR。
-- 默认 Kafka/Redis 地址是 Docker 服务名 `kafka`/`redis`；宿主机执行 `go run` 不会自动适配。
+- 默认 Kafka/Redis 地址是 Docker 服务名 `kafka`/`redis`；backend broker 可用 `CHORDS_KAFKA_BROKERS` 覆盖，其他模块见配置。宿主机 `go run` 不会自动适配。
+- 消息 schema v2 使用永久请求墓碑/room_seq/Outbox relay；默认 WS 同步接纳后才 ACK，旧 Kafka 命令消费默认关闭。迁移仅临时库验证，真实升级/回退见 `docs/message-persistence.md`。
 - 前端 `REACT_APP_URL` 取 `localhost:8000/api`（不带协议），代码会拼接 `http://`；WS 地址另行硬编码。
 - Kubernetes 清单缺少 fanout；Go 测试通过不代表部署具备完整聊天链路。
 
